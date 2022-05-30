@@ -1,8 +1,8 @@
 import { Chessboard, Square } from 'react-chessboard';
-import { Chess, ChessInstance, ShortMove } from 'chess.js';
+import { Chess, ChessInstance, ShortMove, Move } from 'chess.js';
 import { useState, useEffect, useRef } from 'react';
 import { HelmetProvider, Helmet } from 'react-helmet-async';
-import { Button, Container, Badge } from 'react-bootstrap';
+import { Badge } from 'react-bootstrap';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { promotionModal } from '../components/promotionModal';
 import { Container as ModalContainer } from 'react-modal-promise';
@@ -10,7 +10,6 @@ import { pieces, cards } from '../utils/cardsList';
 import isValidMove from '../utils/isValidMove';
 import checkMove from '../utils/checkMove';
 import checkMovePossibility from '../utils/checkMovePossibility';
-import { Link } from 'react-router-dom';
 
 type PromotionType = 'b' | 'n' | 'r' | 'q' | undefined;
 
@@ -22,7 +21,19 @@ interface NewSquare {
 	[key: string]: SquareStyle;
 }
 
-function SingleGame() {
+type Props = {
+	fen?: string;
+	pgn?: string;
+	color?: string;
+	role?: string;
+	sendMove?: (move: any, fen: string, pgn: string) => void;
+	sendFirstCard?: (card: any) => void;
+	mode: 'single' | 'multi';
+	lastMove?: any;
+	firstCard?: string | number;
+};
+
+function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard }: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	const [game] = useState<ChessInstance>(new Chess());
@@ -35,6 +46,7 @@ function SingleGame() {
 	const boardContainerRef = useRef<HTMLDivElement>(null);
 	const [cardsHistory, setCardsHistory] = useState<Array<string | number>>([]);
 	const [result, setResult] = useState<string>('game_going');
+	const [knownLastMove, setKnownLastMove] = useState<any>();
 
 	// const promotionDialog = () => {
 	// 	console.log('promotionDialog');
@@ -74,13 +86,47 @@ function SingleGame() {
 	};
 
 	useEffect(() => {
-		setCard(selectCard());
+		if (mode === 'single') {
+			setCard(selectCard());
+		} else {
+			if (lastMove) {
+				console.log('setting card to last move', lastMove);
+				setCard(lastMove.nextCard);
+			} else if (color === 'w' && !firstCard) {
+				const newCard = selectCard();
+				setCard(newCard);
+				sendFirstCard && sendFirstCard(newCard);
+			}
+		}
 		calcBoardWidth();
 		window.addEventListener('resize', calcBoardWidth);
+		if (fen) {
+			game.load(fen);
+			gameCopy.load(fen);
+		}
+		if (pgn) {
+			game.load_pgn(pgn);
+			gameCopy.load_pgn(pgn);
+		}
 		return () => {
 			window.removeEventListener('resize', calcBoardWidth);
 		};
 	}, []);
+
+	useEffect(() => {
+		if (firstCard && !card && !lastMove) setCard(firstCard);
+		else if (lastMove && !card) setCard(lastMove.nextCard);
+	}, [firstCard, lastMove]);
+
+	useEffect(() => {
+		console.log('lastMove changed', lastMove, knownLastMove);
+		if (lastMove) {
+			if (!knownLastMove || lastMove.moveIndex !== knownLastMove.moveIndex) {
+				setKnownLastMove(lastMove);
+				opponentMove(lastMove);
+			}
+		}
+	}, [lastMove]);
 
 	const isGameOver = () => {
 		const possibleMoves = game.moves({ verbose: true });
@@ -89,6 +135,23 @@ function SingleGame() {
 		}
 		return false;
 	};
+
+	function opponentMove(receivedMove: any) {
+		const toMove: ShortMove = {
+			from: receivedMove.from,
+			to: receivedMove.to,
+			promotion: receivedMove.promotion,
+		};
+		const move = game.move(toMove);
+		if (move) {
+			gameCopy.move(toMove);
+			setCard(receivedMove.nextCard);
+		}
+		setTurn(game.turn());
+		if (game.game_over()) {
+			setResult('game_over');
+		}
+	}
 
 	function commitMove(sourceSquare: Square, targetSquare: Square, promotion: PromotionType) {
 		const toMove: ShortMove = {
@@ -99,6 +162,25 @@ function SingleGame() {
 		const move = game.move(toMove);
 		if (move) {
 			gameCopy.move(toMove);
+			const nextCard = selectCard();
+			setCard(nextCard);
+			sendMove &&
+				sendMove(
+					{
+						...move,
+						card: card,
+						nextCard: nextCard,
+						moveIndex: game.history().length,
+					},
+					game.fen(),
+					game.pgn()
+				);
+			setKnownLastMove({
+				...move,
+				card: card,
+				nextCard: nextCard,
+				moveIndex: game.history().length,
+			});
 		}
 		setTurn(game.turn());
 		if (game.game_over()) {
@@ -138,7 +220,6 @@ function SingleGame() {
 
 			commitMove(sourceSquare, targetSquare, promotion);
 
-			setCard(selectCard());
 			isGameOver();
 			return true;
 		}
@@ -234,42 +315,32 @@ function SingleGame() {
 			</p>
 			<p>
 				<FormattedMessage id='selected_card' />:{' '}
-				{card && (
+				{card ? (
 					<Badge bg='success' style={{ fontSize: 20 }}>
 						<FormattedMessage id={'selected.' + card} />
 					</Badge>
+				) : (
+					<FormattedMessage id='waiting' />
 				)}
 			</p>
 			<div ref={boardContainerRef}>
 				<Chessboard
+					arePiecesDraggable={mode === 'single' || (role === 'participant' && color === turn)}
 					id={1}
 					position={game.fen()}
-					onPieceDrop={onDrop}
-					onSquareClick={onSquareClick}
+					onPieceDrop={mode === 'single' || (role === 'participant' && color === turn) ? onDrop : undefined}
+					onSquareClick={mode === 'single' || (role === 'participant' && color === turn) ? onSquareClick : undefined}
 					boardWidth={boardWidth}
+					boardOrientation={color === 'b' ? 'black' : 'white'}
 					customSquareStyles={{
 						...optionSquares,
 					}}
 				/>
 			</div>
-			<p>
+			{/* <p>
 				<FormattedMessage id={result} />
-			</p>
-			<p>
-				<Button onClick={reset}>
-					<FormattedMessage id='new_game' />
-				</Button>{' '}
-				<Button onClick={back}>
-					<FormattedMessage id='undo' />
-				</Button>{' '}
-			</p>
-			<p>
-				<Link to='/chess' className='btn btn-primary'>
-					<FormattedMessage id='to_main' />
-				</Link>
+			</p> */}
 
-				{/* <Button onClick={promotionDialog}>Promotion</Button> */}
-			</p>
 			<ModalContainer
 				onOpen={() => {
 					console.log('onopen');
@@ -282,4 +353,4 @@ function SingleGame() {
 	);
 }
 
-export default SingleGame;
+export default Board;

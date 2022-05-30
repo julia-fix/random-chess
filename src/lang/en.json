@@ -33,5 +33,14 @@
 	"new_game": "New game",
 	"undo": "Undo",
 	"game_going": "Game is going on",
-	"game_over": "Game over"
+	"game_over": "Game over",
+	"choose_mode": "Choose mode",
+	"single_player": "Single player",
+	"play_with_friend": "Play with friend",
+	"to_main": "To main page",
+	"waiting_for_opponent": "Waiting for opponent",
+	"copy_link": "Copy game link",
+	"copy_link_instructions": "Copy game link and send it to your friend. When he open the link, the game will start",
+	"link_copied": "Link copied",
+	"waiting": "Waiting"
 }
