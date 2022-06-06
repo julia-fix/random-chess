@@ -15,7 +15,7 @@ const checkMove = (from: Square, to: Square, promotion: PromotionType, game: Che
 		promotion: promotion,
 	});
 	move && gameCopy.undo();
-	if (move && !isValidMove(move, card, game)) {
+	if (move && !isValidMove(move, card, gameCopy)) {
 		return null;
 	}
 	return move;

@@ -76,16 +76,29 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			newCard = cards[Math.floor(Math.random() * cards.length)];
 			const possibleMoves = game.moves({ verbose: true });
 			for (const move of possibleMoves) {
-				if (isValidMove(move, newCard, game)) {
+				if (isValidMove(move, newCard, gameCopy)) {
 					cardPossible = true;
 					break;
 				}
 			}
 		} while (!cardPossible);
+		if (mode === 'single') {
+			cardsHistory.push(newCard);
+		}
 		return newCard;
 	};
 
 	useEffect(() => {
+		calcBoardWidth();
+		window.addEventListener('resize', calcBoardWidth);
+		if (fen) {
+			game.load(fen);
+			gameCopy.load(fen);
+		}
+		if (pgn) {
+			game.load_pgn(pgn);
+			gameCopy.load_pgn(pgn);
+		}
 		if (mode === 'single') {
 			setCard(selectCard());
 		} else {
@@ -97,16 +110,6 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				setCard(newCard);
 				sendFirstCard && sendFirstCard(newCard);
 			}
-		}
-		calcBoardWidth();
-		window.addEventListener('resize', calcBoardWidth);
-		if (fen) {
-			game.load(fen);
-			gameCopy.load(fen);
-		}
-		if (pgn) {
-			game.load_pgn(pgn);
-			gameCopy.load_pgn(pgn);
 		}
 		return () => {
 			window.removeEventListener('resize', calcBoardWidth);
@@ -154,15 +157,23 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	}
 
 	function commitMove(sourceSquare: Square, targetSquare: Square, promotion: PromotionType) {
+		console.log('commitMove', sourceSquare, targetSquare, promotion);
 		const toMove: ShortMove = {
 			from: sourceSquare,
 			to: targetSquare,
 			promotion: promotion,
 		};
 		const move = game.move(toMove);
+		console.log('commitMove move', move);
 		if (move) {
 			gameCopy.move(toMove);
-			const nextCard = selectCard();
+			console.log('gameCopy moved');
+			let nextCard;
+			if (!game.game_over()) {
+				nextCard = selectCard();
+			} else {
+				nextCard = 0;
+			}
 			setCard(nextCard);
 			sendMove &&
 				sendMove(
@@ -182,9 +193,11 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				moveIndex: game.history().length,
 			});
 		}
-		setTurn(game.turn());
+
 		if (game.game_over()) {
 			setResult('game_over');
+		} else {
+			setTurn(game.turn());
 		}
 	}
 
@@ -215,7 +228,9 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		} else return commitDrop();
 
 		function commitDrop() {
+			console.log('commitDrop', sourceSquare, targetSquare, promotion);
 			let move = checkMove(sourceSquare, targetSquare, promotion, game, gameCopy, card);
+			console.log('move', move);
 			if (move === null) return false; // illegal move
 
 			commitMove(sourceSquare, targetSquare, promotion);
@@ -280,8 +295,9 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		gameCopy.reset();
 		setTurn(game.turn());
 		setOptionSquares({});
-		setCard(selectCard());
 		setCardsHistory([]);
+		setCard(selectCard());
+
 		setResult('game_going');
 	};
 
@@ -292,6 +308,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		setOptionSquares({});
 		setResult('game_going');
 		if (cardsHistory.length > 1) {
+			console.log('back', cardsHistory);
 			setCard(cardsHistory[cardsHistory.length - 2]);
 			setCardsHistory(cardsHistory.slice(0, -1));
 		} else {
@@ -319,6 +336,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 					<Badge bg='success' style={{ fontSize: 20 }}>
 						<FormattedMessage id={'selected.' + card} />
 					</Badge>
+				) : card === 0 ? (
+					<FormattedMessage id='game_over' />
 				) : (
 					<FormattedMessage id='waiting' />
 				)}
@@ -337,6 +356,18 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 					}}
 				/>
 			</div>
+
+			{mode === 'single' && (
+				<div style={{ paddingTop: 20 }}>
+					<button onClick={back} className='btn btn-primary'>
+						<FormattedMessage id='undo' />
+					</button>{' '}
+					<button onClick={reset} className='btn btn-primary'>
+						<FormattedMessage id='new_game' />
+					</button>
+				</div>
+			)}
+			<div className='pgn-container'>{game.pgn()}</div>
 			{/* <p>
 				<FormattedMessage id={result} />
 			</p> */}

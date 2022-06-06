@@ -5,6 +5,7 @@ import { ChessInstance, Move } from 'chess.js';
  * Checks if the move is valid according to selected card
  */
 const isValidMove = (move: Move, cardToCheck: string | number, game: ChessInstance) => {
+	console.log('cardToCheck', cardToCheck);
 	// console.log('move', move);
 	if (cardToCheck === 'any') return true;
 	if (numbers.indexOf(cardToCheck as number) > -1 || letters.indexOf(cardToCheck as string) > -1) {
@@ -20,13 +21,19 @@ const isValidMove = (move: Move, cardToCheck: string | number, game: ChessInstan
 		}
 	}
 	if (cardToCheck === 'check') {
-		if (move.san.indexOf('+') > -1) {
+		if (move.san.indexOf('+') > -1 || move.san.indexOf('#') > -1) {
 			return true;
 		}
 	}
 	if (cardToCheck === 'stalemate') {
-		if (game.in_stalemate()) {
-			return true;
+		let moveToCheck = game.move(move);
+		if (moveToCheck) {
+			if (game.in_stalemate()) {
+				game.undo();
+				return true;
+			} else {
+				game.undo();
+			}
 		}
 	}
 	if (cardToCheck === 'take') {

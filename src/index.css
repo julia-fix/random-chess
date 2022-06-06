@@ -11,3 +11,10 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.pgn-container {
+  max-height: 70px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column-reverse;
+}

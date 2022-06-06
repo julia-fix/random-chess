@@ -1,28 +1,14 @@
 import { Route, Routes } from 'react-router-dom';
 import { Outlet } from 'react-router';
 
-import { IntlProvider } from 'react-intl';
-import Russian from '../lang/ru.json';
-import English from '../lang/en.json';
-
-import { currentLang } from '../utils/settings';
 import SingleGame from '../pages/SingleGame';
 import NotFound from '../pages/NotFound';
 import PlayGame from '../pages/PlayGame';
 import PlayGameIndex from '../pages/PlayGameIndex';
 import GameChoice from '../pages/GameChoice';
 import { Toaster } from 'react-hot-toast';
-
-type OneLang = { [key: string]: string };
-
-type LangList = {
-	[key: string]: OneLang;
-};
-
-const langs: LangList = {
-	ru: Russian,
-	en: English,
-};
+import { HelmetProvider, Helmet } from 'react-helmet-async';
+import { useIntl } from 'react-intl';
 
 const LangRoutes = () => (
 	<>
@@ -43,8 +29,15 @@ const LangRoutes = () => (
 const langsRoutes = ['ru', 'en'];
 
 export default function ChessRoutes() {
+	const intl = useIntl();
 	return (
-		<IntlProvider locale={currentLang} messages={langs[currentLang]}>
+		<>
+			<HelmetProvider>
+				<Helmet>
+					<title>{intl.formatMessage({ id: 'chess' })}</title>
+					<meta name='description' content={intl.formatMessage({ id: 'chess' })} />
+				</Helmet>
+			</HelmetProvider>
 			<div className='container'>
 				<Routes>
 					{langsRoutes.map((lang: string) => (
@@ -54,6 +47,6 @@ export default function ChessRoutes() {
 				</Routes>
 			</div>
 			<Toaster />
-		</IntlProvider>
+		</>
 	);
 }
