@@ -1,15 +1,15 @@
 import { Chessboard, Square } from 'react-chessboard';
-import { Chess, ChessInstance, ShortMove, Move } from 'chess.js';
+import { Chess, ChessInstance, ShortMove } from 'chess.js';
 import { useState, useEffect, useRef } from 'react';
-import { HelmetProvider, Helmet } from 'react-helmet-async';
 import { Badge } from 'react-bootstrap';
-import { FormattedMessage, useIntl } from 'react-intl';
+import { FormattedMessage } from 'react-intl';
 import { promotionModal } from '../components/promotionModal';
 import { Container as ModalContainer } from 'react-modal-promise';
 import { pieces, cards } from '../utils/cardsList';
 import isValidMove from '../utils/isValidMove';
 import checkMove from '../utils/checkMove';
 import checkMovePossibility from '../utils/checkMovePossibility';
+import { Link } from 'react-router-dom';
 
 type PromotionType = 'b' | 'n' | 'r' | 'q' | undefined;
 
@@ -41,7 +41,6 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	const [card, setCard] = useState<string | number>('');
 	const [moveFrom, setMoveFrom] = useState('');
 	const [turn, setTurn] = useState<string>('w');
-	const intl = useIntl();
 	const [boardWidth, setBoardWidth] = useState(400);
 	const boardContainerRef = useRef<HTMLDivElement>(null);
 	const [cardsHistory, setCardsHistory] = useState<Array<string | number>>([]);
@@ -150,9 +149,11 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			gameCopy.move(toMove);
 			setCard(receivedMove.nextCard);
 		}
-		setTurn(game.turn());
+
 		if (game.game_over()) {
 			setResult('game_over');
+		} else {
+			setTurn(game.turn());
 		}
 	}
 
@@ -318,12 +319,6 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 	return (
 		<div style={{ paddingTop: 20 }}>
-			<HelmetProvider>
-				<Helmet>
-					<title>{intl.formatMessage({ id: 'chess' })}</title>
-					<meta name='description' content={intl.formatMessage({ id: 'chess' })} />
-				</Helmet>
-			</HelmetProvider>
 			<p>
 				<FormattedMessage id='turn' />:{' '}
 				<Badge bg={turn === 'b' ? 'dark' : 'light'} text={turn === 'b' ? 'light' : 'dark'}>
@@ -359,12 +354,15 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 			{mode === 'single' && (
 				<div style={{ paddingTop: 20 }}>
-					<button onClick={back} className='btn btn-primary'>
+					<button onClick={back} className='btn btn-primary' style={{ marginBottom: 15 }}>
 						<FormattedMessage id='undo' />
 					</button>{' '}
-					<button onClick={reset} className='btn btn-primary'>
+					<button onClick={reset} className='btn btn-primary' style={{ marginBottom: 15 }}>
 						<FormattedMessage id='new_game' />
-					</button>
+					</button>{' '}
+					<Link to='/chess' className='btn btn-primary' style={{ marginBottom: 15 }}>
+						<FormattedMessage id='to_main' />
+					</Link>
 				</div>
 			)}
 			<div className='pgn-container'>{game.pgn()}</div>

@@ -5,7 +5,6 @@ import { db } from '../utils/firebase';
 import Board from '../components/Board';
 import getGame from '../utils/getGame';
 import { FormattedMessage, useIntl } from 'react-intl';
-import { Link } from 'react-router-dom';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import toast from 'react-hot-toast';
 
@@ -200,11 +199,6 @@ export default function PlayGame() {
 					<Board fen={fen} pgn={pgn} lastMove={lastMove} color={color} role={role} sendMove={sendMove} mode='multi' sendFirstCard={sendFirstCard} firstCard={firstCard} />
 				</>
 			)}
-			<p style={{ marginTop: 20 }}>
-				<Link to='/chess' className='btn btn-primary'>
-					<FormattedMessage id='to_main' />
-				</Link>
-			</p>
 		</div>
 	);
 }
