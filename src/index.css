@@ -1,3 +1,9 @@
+@font-face {
+  font-family: 'Noto Chess';
+  font-display: block;
+  src: url('fonts/lichess.chess.woff2') format("woff2"), url('fonts/lichess.chess.woff') format("woff")
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -17,4 +23,5 @@ code {
   overflow: auto;
   display: flex;
   flex-direction: column-reverse;
+  font-family: 'Noto Chess', sans-serif;
 }

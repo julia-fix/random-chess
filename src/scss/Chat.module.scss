@@ -1,0 +1,34 @@
+.floatButton {
+  width: 60px;
+  height: 60px;
+  background: #def9ec;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+
+  img {
+    width: 40px;
+    display: block;
+  }
+}
+
+.counter {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #a42e0d;
+  text-align: center;
+  line-height: 20px;
+  color: #fff;
+  font-size: 10px;
+}

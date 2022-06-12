@@ -1,6 +1,6 @@
 import { Chessboard, Square } from 'react-chessboard';
 import { Chess, ChessInstance, ShortMove } from 'chess.js';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Badge } from 'react-bootstrap';
 import { FormattedMessage } from 'react-intl';
 import { promotionModal } from '../components/promotionModal';
@@ -9,7 +9,8 @@ import { pieces, cards } from '../utils/cardsList';
 import isValidMove from '../utils/isValidMove';
 import checkMove from '../utils/checkMove';
 import checkMovePossibility from '../utils/checkMovePossibility';
-import { Link } from 'react-router-dom';
+import LangLink from './LangLink';
+import PlayerInfo from './PlayerInfo';
 
 type PromotionType = 'b' | 'n' | 'r' | 'q' | undefined;
 
@@ -24,16 +25,17 @@ interface NewSquare {
 type Props = {
 	fen?: string;
 	pgn?: string;
-	color?: string;
+	color?: 'w' | 'b';
 	role?: string;
 	sendMove?: (move: any, fen: string, pgn: string) => void;
 	sendFirstCard?: (card: any) => void;
 	mode: 'single' | 'multi';
 	lastMove?: any;
 	firstCard?: string | number;
+	players?: { w: string | null; b: string | null };
 };
 
-function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard }: Props) {
+function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard, players }: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	const [game] = useState<ChessInstance>(new Chess());
@@ -46,17 +48,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	const [cardsHistory, setCardsHistory] = useState<Array<string | number>>([]);
 	const [result, setResult] = useState<string>('game_going');
 	const [knownLastMove, setKnownLastMove] = useState<any>();
-
-	// const promotionDialog = () => {
-	// 	console.log('promotionDialog');
-	// 	promotionModal()
-	// 		.then((res) => {
-	// 			console.log('Modal promise resolved', res);
-	// 		})
-	// 		.catch(() => {
-	// 			console.log('Modal promise rejected');
-	// 		});
-	// };
+	const [inited, setInited] = useState(false);
+	const [cardsRemained, setCardsRemained] = useState(cards);
 
 	const calcBoardWidth = () => {
 		if (boardContainerRef.current) {
@@ -68,67 +61,105 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		}
 	};
 
-	const selectCard = () => {
-		let newCard: string | number;
-		let cardPossible = false;
-		do {
-			newCard = cards[Math.floor(Math.random() * cards.length)];
-			const possibleMoves = game.moves({ verbose: true });
-			for (const move of possibleMoves) {
-				if (isValidMove(move, newCard, gameCopy)) {
-					cardPossible = true;
-					break;
+	const selectCard = useCallback(
+		function () {
+			let newCard: string | number;
+			let cardPossible = false;
+			let cardsRemainedCopy = [...cardsRemained];
+			do {
+				newCard = cardsRemainedCopy[Math.floor(Math.random() * cardsRemainedCopy.length)];
+				let newCardCopy = newCard;
+				// delete first occurence of newCard from cardsRemainedCopy
+				cardsRemainedCopy = cardsRemainedCopy.filter(function (card) {
+					return card !== newCardCopy;
+				});
+				if (!cardsRemainedCopy.length) {
+					cardsRemainedCopy = [...cards];
 				}
+				const possibleMoves = game.moves({ verbose: true });
+				for (const move of possibleMoves) {
+					if (isValidMove(move, newCard, gameCopy)) {
+						cardPossible = true;
+						break;
+					}
+				}
+			} while (!cardPossible);
+			setCardsRemained(cardsRemainedCopy);
+			if (mode === 'single') {
+				cardsHistory.push(newCard);
 			}
-		} while (!cardPossible);
-		if (mode === 'single') {
-			cardsHistory.push(newCard);
-		}
-		return newCard;
-	};
+			return newCard;
+		},
+		[cardsHistory, game, gameCopy, mode, cardsRemained]
+	);
+
+	const opponentMove = useCallback(
+		(receivedMove: any) => {
+			const toMove: ShortMove = {
+				from: receivedMove.from,
+				to: receivedMove.to,
+				promotion: receivedMove.promotion,
+			};
+			const move = game.move(toMove);
+			if (move) {
+				gameCopy.move(toMove);
+				setCard(receivedMove.nextCard);
+			}
+
+			if (game.game_over()) {
+				setResult('game_over');
+			} else {
+				setTurn(game.turn());
+			}
+		},
+		[game, gameCopy]
+	);
 
 	useEffect(() => {
 		calcBoardWidth();
 		window.addEventListener('resize', calcBoardWidth);
-		if (fen) {
-			game.load(fen);
-			gameCopy.load(fen);
-		}
-		if (pgn) {
-			game.load_pgn(pgn);
-			gameCopy.load_pgn(pgn);
-		}
-		if (mode === 'single') {
-			setCard(selectCard());
-		} else {
-			if (lastMove) {
-				console.log('setting card to last move', lastMove);
-				setCard(lastMove.nextCard);
-			} else if (color === 'w' && !firstCard) {
-				const newCard = selectCard();
-				setCard(newCard);
-				sendFirstCard && sendFirstCard(newCard);
+		if (!inited) {
+			if (fen) {
+				game.load(fen);
+				gameCopy.load(fen);
 			}
+			if (pgn) {
+				game.load_pgn(pgn);
+				gameCopy.load_pgn(pgn);
+			}
+			if (mode === 'single') {
+				setCard(selectCard());
+			} else {
+				if (lastMove) {
+					// console.log('setting card to last move', lastMove);
+					setCard(lastMove.nextCard);
+				} else if (color === 'w' && !firstCard) {
+					const newCard = selectCard();
+					setCard(newCard);
+					sendFirstCard && sendFirstCard(newCard);
+				}
+			}
+			setInited(true);
+			return () => {
+				window.removeEventListener('resize', calcBoardWidth);
+			};
 		}
-		return () => {
-			window.removeEventListener('resize', calcBoardWidth);
-		};
-	}, []);
+	}, [color, fen, pgn, mode, lastMove, firstCard, sendFirstCard, gameCopy, game, selectCard, inited]);
 
 	useEffect(() => {
 		if (firstCard && !card && !lastMove) setCard(firstCard);
 		else if (lastMove && !card) setCard(lastMove.nextCard);
-	}, [firstCard, lastMove]);
+	}, [firstCard, lastMove, card]);
 
 	useEffect(() => {
-		console.log('lastMove changed', lastMove, knownLastMove);
+		// console.log('lastMove changed', lastMove, knownLastMove);
 		if (lastMove) {
 			if (!knownLastMove || lastMove.moveIndex !== knownLastMove.moveIndex) {
 				setKnownLastMove(lastMove);
 				opponentMove(lastMove);
 			}
 		}
-	}, [lastMove]);
+	}, [lastMove, knownLastMove, opponentMove]);
 
 	const isGameOver = () => {
 		const possibleMoves = game.moves({ verbose: true });
@@ -138,37 +169,18 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		return false;
 	};
 
-	function opponentMove(receivedMove: any) {
-		const toMove: ShortMove = {
-			from: receivedMove.from,
-			to: receivedMove.to,
-			promotion: receivedMove.promotion,
-		};
-		const move = game.move(toMove);
-		if (move) {
-			gameCopy.move(toMove);
-			setCard(receivedMove.nextCard);
-		}
-
-		if (game.game_over()) {
-			setResult('game_over');
-		} else {
-			setTurn(game.turn());
-		}
-	}
-
 	function commitMove(sourceSquare: Square, targetSquare: Square, promotion: PromotionType) {
-		console.log('commitMove', sourceSquare, targetSquare, promotion);
+		// console.log('commitMove', sourceSquare, targetSquare, promotion);
 		const toMove: ShortMove = {
 			from: sourceSquare,
 			to: targetSquare,
 			promotion: promotion,
 		};
 		const move = game.move(toMove);
-		console.log('commitMove move', move);
+		// console.log('commitMove move', move);
 		if (move) {
 			gameCopy.move(toMove);
-			console.log('gameCopy moved');
+			// console.log('gameCopy moved');
 			let nextCard;
 			if (!game.game_over()) {
 				nextCard = selectCard();
@@ -193,6 +205,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				nextCard: nextCard,
 				moveIndex: game.history().length,
 			});
+			// console.log('game pgn', game.pgn());
+			// console.log('gamecopy pgn', gameCopy.pgn());
 		}
 
 		if (game.game_over()) {
@@ -215,12 +229,12 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			} else {
 				promotionModal()
 					.then((res) => {
-						console.log('Modal promise resolved', res);
+						// console.log('Modal promise resolved', res);
 						promotion = res;
 						return commitDrop();
 					})
 					.catch(() => {
-						console.log('Modal promise rejected');
+						// console.log('Modal promise rejected');
 						promotion = 'q';
 						return commitDrop();
 					});
@@ -229,9 +243,9 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		} else return commitDrop();
 
 		function commitDrop() {
-			console.log('commitDrop', sourceSquare, targetSquare, promotion);
+			// console.log('commitDrop', sourceSquare, targetSquare, promotion);
 			let move = checkMove(sourceSquare, targetSquare, promotion, game, gameCopy, card);
-			console.log('move', move);
+			// console.log('move', move);
 			if (move === null) return false; // illegal move
 
 			commitMove(sourceSquare, targetSquare, promotion);
@@ -309,7 +323,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		setOptionSquares({});
 		setResult('game_going');
 		if (cardsHistory.length > 1) {
-			console.log('back', cardsHistory);
+			// console.log('back', cardsHistory);
 			setCard(cardsHistory[cardsHistory.length - 2]);
 			setCardsHistory(cardsHistory.slice(0, -1));
 		} else {
@@ -317,8 +331,17 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		}
 	};
 
+	// const onPieceDragBegin = (piece: any, sourceSquare: any) => {
+	// 	console.log('piece', piece);
+	// 	console.log('sourceSquare', sourceSquare);
+	// 	if (piece.substring(0, 1) !== turn) {
+	// 		console.log('Wrong!');
+	// 		return false;
+	// 	}
+	// };
+
 	return (
-		<div style={{ paddingTop: 20 }}>
+		<div style={{ paddingTop: 20, paddingBottom: 50 }}>
 			<p>
 				<FormattedMessage id='turn' />:{' '}
 				<Badge bg={turn === 'b' ? 'dark' : 'light'} text={turn === 'b' ? 'light' : 'dark'}>
@@ -337,7 +360,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 					<FormattedMessage id='waiting' />
 				)}
 			</p>
-			<div ref={boardContainerRef}>
+			{players && color && <PlayerInfo uid={players[color === 'w' ? 'b' : 'w']} />}
+			<div ref={boardContainerRef} className='board-container'>
 				<Chessboard
 					arePiecesDraggable={mode === 'single' || (role === 'participant' && color === turn)}
 					id={1}
@@ -351,20 +375,24 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 					}}
 				/>
 			</div>
+			{players && color && <PlayerInfo uid={players[color]} />}
 
-			{mode === 'single' && (
-				<div style={{ paddingTop: 20 }}>
+			<div style={{ paddingTop: 20 }}>
+				{mode === 'single' && (
 					<button onClick={back} className='btn btn-primary' style={{ marginBottom: 15 }}>
 						<FormattedMessage id='undo' />
-					</button>{' '}
+					</button>
+				)}{' '}
+				{mode === 'single' && (
 					<button onClick={reset} className='btn btn-primary' style={{ marginBottom: 15 }}>
 						<FormattedMessage id='new_game' />
-					</button>{' '}
-					<Link to='/chess' className='btn btn-primary' style={{ marginBottom: 15 }}>
-						<FormattedMessage id='to_main' />
-					</Link>
-				</div>
-			)}
+					</button>
+				)}{' '}
+				<LangLink to='/' className='btn btn-primary' style={{ marginBottom: 15 }}>
+					<FormattedMessage id='to_main' />
+				</LangLink>
+			</div>
+
 			<div className='pgn-container'>{game.pgn()}</div>
 			{/* <p>
 				<FormattedMessage id={result} />
@@ -372,10 +400,10 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 			<ModalContainer
 				onOpen={() => {
-					console.log('onopen');
+					// console.log('onopen');
 				}}
 				onRemove={() => {
-					console.log('onRemove');
+					// console.log('onRemove');
 				}}
 			/>
 		</div>

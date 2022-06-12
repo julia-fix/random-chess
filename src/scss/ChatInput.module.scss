@@ -1,0 +1,33 @@
+.container {
+  display: flex;
+  height: 30px;
+}
+
+$input-height: 40px;
+
+.input {
+  flex-grow: 1;
+  height: $input-height;
+  line-height: $input-height;
+  margin-right: 10px;
+  border-radius: 10px;
+  border: none;
+  padding: 0 7px;
+}
+
+.button {
+  flex: 0 0 $input-height;
+  height: $input-height;
+  line-height: $input-height;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+  background: transparent;
+  border: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}

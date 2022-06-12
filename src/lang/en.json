@@ -42,5 +42,12 @@
 	"copy_link": "Copy game link",
 	"copy_link_instructions": "Copy game link and send it to your friend. When he open the link, the game will start",
 	"link_copied": "Link copied",
-	"waiting": "Waiting"
+	"waiting": "Waiting",
+	"login": "Login",
+	"logout": "Logout",
+	"no_name": "No name",
+	"guest": "Guest",
+	"hello": "Hello",
+	"game_chat": "Game chat",
+	"enter_message": "Enter message"
 }

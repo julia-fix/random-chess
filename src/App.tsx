@@ -4,6 +4,7 @@ import { currentLang } from './utils/settings';
 
 import Russian from './lang/ru.json';
 import English from './lang/en.json';
+import UserProvider from './contexts/UserContext';
 
 type OneLang = { [key: string]: string };
 
@@ -19,7 +20,9 @@ const langs: LangList = {
 function App() {
 	return (
 		<IntlProvider locale={currentLang} messages={langs[currentLang]}>
-			<ChessRoutes />
+			<UserProvider>
+				<ChessRoutes />
+			</UserProvider>
 		</IntlProvider>
 	);
 }

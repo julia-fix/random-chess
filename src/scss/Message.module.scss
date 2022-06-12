@@ -1,0 +1,53 @@
+.container {
+  display: flex;
+  width: 100%;
+  margin-bottom: 10px;
+
+  &.left {
+    flex-direction: row-reverse;
+    padding-right: 40px;
+  }
+
+  &.right {
+    padding-left: 40px;
+  }
+}
+
+.box {
+  padding: 10px;
+  border: 1px solid #ccc;
+  background: rgb(18, 18, 18);
+  flex-grow: 1;
+  margin: 0 5px;
+  overflow: hidden;
+
+  &.left {
+    border-radius: 0 15px 15px 15px;
+
+  }
+
+  &.right {
+    border-radius: 15px 0 15px 15px;
+  }
+}
+
+.meta {
+  font-size: 12px;
+  opacity: .6;
+  font-style: italic;
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.username {
+  flex: 1 1 auto;
+  margin-right: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date {
+  white-space: nowrap;
+}

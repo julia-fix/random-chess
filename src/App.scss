@@ -1,0 +1,81 @@
+body,
+.mob-nav-dark {
+  color: white;
+  background: #424242;
+}
+
+.mob-nav-dark {
+
+  a,
+  button {
+
+    color: inherit;
+
+    &:hover,
+    &:focus {
+      color: lightblue;
+    }
+
+    &.dropdown-item {
+
+      &:hover,
+      &:focus {
+        color: navy;
+      }
+    }
+  }
+
+  .btn-close {
+    filter: invert(100%);
+  }
+}
+
+.create-game-link {
+  color: white;
+  text-align: left;
+  font-size: inherit;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+  display: flex;
+  align-items: center;
+}
+
+.user-dropdown-title {
+  display: inline-flex;
+  max-width: 100%;
+
+}
+
+.user-dropdown-menu {
+  .dropdown-toggle {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.user-dropdown-name {
+  margin: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-loading {
+  text-align: center;
+  padding: 50px 20px;
+  font-size: 100px;
+}
+
+.player-data {
+  display: flex;
+  align-items: center;
+}
+
+.player-data-name {
+  margin-left: 10px;
+}
+
+.board-container {
+  margin: 10px 0;
+}

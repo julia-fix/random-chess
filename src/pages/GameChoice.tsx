@@ -1,7 +1,6 @@
-import React from 'react';
 import { FormattedMessage } from 'react-intl';
 import CreateGame from '../components/CreateGame';
-import { Link } from 'react-router-dom';
+import LangLink from '../components/LangLink';
 
 export default function GameChoice() {
 	return (
@@ -13,9 +12,9 @@ export default function GameChoice() {
 				<CreateGame>
 					<FormattedMessage id='play_with_friend' />
 				</CreateGame>
-				<Link to='/chess/single' className='btn btn-lg btn-primary'>
+				<LangLink to='/single' className='btn btn-lg btn-primary'>
 					<FormattedMessage id='single_player' />
-				</Link>
+				</LangLink>
 			</div>
 		</>
 	);
