@@ -6,11 +6,11 @@ import NotFound from '../pages/NotFound';
 import OnlineGame from '../pages/OnlineGame';
 import GameChoice from '../pages/GameChoice';
 import { Toaster } from 'react-hot-toast';
-import { HelmetProvider, Helmet } from 'react-helmet-async';
 import { useIntl } from 'react-intl';
 import Auth from '../pages/Auth';
 import Header from '../components/Header';
 import RequireAuth from '../components/RequireAuth';
+import { useEffect } from 'react';
 
 const LangRoutes = () => (
 	<>
@@ -35,23 +35,40 @@ const langsRoutes = ['ru', 'en'];
 
 export default function ChessRoutes() {
 	const intl = useIntl();
+	const title = intl.formatMessage({ id: 'chess' });
+
+	// update the page title and meta description
+	useEffect(() => {
+		document.title = title;
+		const metaDescription = document.querySelector('meta[name="description"]');
+		if (metaDescription) {
+			metaDescription.setAttribute('content', title);
+		} else {
+			const meta = document.createElement('meta');
+			meta.name = 'description';
+			meta.content = title;
+			document.head.appendChild(meta);
+		}
+	}, [title]);
+
 	return (
 		<>
-			<HelmetProvider>
-				<Helmet>
-					<title>{intl.formatMessage({ id: 'chess' })}</title>
-					<meta name='description' content={intl.formatMessage({ id: 'chess' })} />
-				</Helmet>
-			</HelmetProvider>
+
 			<Header />
+
 			<div className='container'>
 				<Routes>
 					{langsRoutes.map((lang: string) => (
-						<Route key={lang} path={`/chess/${lang}/*`} element={<LangRoutes />} />
+						<Route
+							key={lang}
+							path={`/chess/${lang}/*`}
+							element={<LangRoutes />}
+						/>
 					))}
 					<Route path='chess/*' element={<LangRoutes />} />
 				</Routes>
 			</div>
+
 			<Toaster />
 		</>
 	);

@@ -1,5 +1,5 @@
-import { Chessboard, Square } from 'react-chessboard';
-import { Chess, ChessInstance, ShortMove } from 'chess.js';
+import { Chessboard } from 'react-chessboard';
+import { Chess, Square } from 'chess.js';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Badge } from 'react-bootstrap';
 import { FormattedMessage } from 'react-intl';
@@ -11,8 +11,14 @@ import checkMove from '../utils/checkMove';
 import checkMovePossibility from '../utils/checkMovePossibility';
 import LangLink from './LangLink';
 import PlayerInfo from './PlayerInfo';
+import Moves from './Moves';
 
 type PromotionType = 'b' | 'n' | 'r' | 'q' | undefined;
+type ShortMove = {
+	from: string;
+	to: string;
+	promotion?: string;
+};
 
 interface SquareStyle {
 	background: string;
@@ -38,8 +44,8 @@ type Props = {
 function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard, players }: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
-	const [game] = useState<ChessInstance>(new Chess());
-	const [gameCopy] = useState<ChessInstance>(new Chess());
+	const [game] = useState<Chess>(new Chess());
+	const [gameCopy] = useState<Chess>(new Chess());
 	const [card, setCard] = useState<string | number>('');
 	const [moveFrom, setMoveFrom] = useState('');
 	const [turn, setTurn] = useState<string>('w');
@@ -106,7 +112,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				setCard(receivedMove.nextCard);
 			}
 
-			if (game.game_over()) {
+			if (game.isGameOver()) {
 				setResult('game_over');
 			} else {
 				setTurn(game.turn());
@@ -124,8 +130,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				gameCopy.load(fen);
 			}
 			if (pgn) {
-				game.load_pgn(pgn);
-				gameCopy.load_pgn(pgn);
+				game.loadPgn(pgn);
+				gameCopy.loadPgn(pgn);
 			}
 			if (mode === 'single') {
 				setCard(selectCard());
@@ -163,7 +169,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 	const isGameOver = () => {
 		const possibleMoves = game.moves({ verbose: true });
-		if (game.game_over() || game.in_draw() || possibleMoves.length === 0) {
+		if (game.isGameOver() || game.isDraw() || possibleMoves.length === 0) {
 			return true;
 		}
 		return false;
@@ -182,7 +188,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			gameCopy.move(toMove);
 			// console.log('gameCopy moved');
 			let nextCard;
-			if (!game.game_over()) {
+			if (!game.isGameOver()) {
 				nextCard = selectCard();
 			} else {
 				nextCard = 0;
@@ -209,18 +215,21 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			// console.log('gamecopy pgn', gameCopy.pgn());
 		}
 
-		if (game.game_over()) {
+		if (game.isGameOver()) {
 			setResult('game_over');
 		} else {
 			setTurn(game.turn());
 		}
 	}
 
-	function onDrop(sourceSquare: Square, targetSquare: Square) {
-		let piece = game.get(sourceSquare);
+	function onDrop({ sourceSquare, targetSquare }: { piece: any; sourceSquare: string; targetSquare: string | null }) {
+		if (!targetSquare) return false;
+		const sourceSquareTyped = sourceSquare as Square;
+		const targetSquareTyped = targetSquare as Square;
+		let piece = game.get(sourceSquareTyped);
 		let promotion: PromotionType;
-		if (piece && piece.type === 'p' && (targetSquare.indexOf('1') > -1 || targetSquare.indexOf('8') > -1)) {
-			let move = checkMovePossibility(sourceSquare, targetSquare, gameCopy);
+		if (piece && piece.type === 'p' && (targetSquareTyped.indexOf('1') > -1 || targetSquareTyped.indexOf('8') > -1)) {
+			let move = checkMovePossibility(sourceSquareTyped, targetSquareTyped, gameCopy);
 			if (!move) return false;
 
 			if (pieces.indexOf(card as string) > -1) {
@@ -244,11 +253,11 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 		function commitDrop() {
 			// console.log('commitDrop', sourceSquare, targetSquare, promotion);
-			let move = checkMove(sourceSquare, targetSquare, promotion, game, gameCopy, card);
+			let move = checkMove(sourceSquareTyped, targetSquareTyped, promotion, game, gameCopy, card);
 			// console.log('move', move);
 			if (move === null) return false; // illegal move
 
-			commitMove(sourceSquare, targetSquare, promotion);
+			commitMove(sourceSquareTyped, targetSquareTyped, promotion);
 
 			isGameOver();
 			return true;
@@ -281,7 +290,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		setOptionSquares(newSquares);
 	}
 
-	function onSquareClick(square: Square) {
+	function onSquareClick({ square }: { piece: any; square: string }) {
+		const squareTyped = square as Square;
 		function resetFirstMove(square: Square) {
 			setMoveFrom(square);
 			getMoveOptions(square);
@@ -289,20 +299,20 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 		// from square
 		if (!moveFrom) {
-			resetFirstMove(square);
+			resetFirstMove(squareTyped);
 			return;
 		}
 
 		// attempt to make move
 
-		const move = checkMovePossibility(moveFrom as Square, square, gameCopy);
+		const move = checkMovePossibility(moveFrom as Square, squareTyped, gameCopy);
 
 		if (move === null) {
-			resetFirstMove(square);
+			resetFirstMove(squareTyped);
 			return;
 		}
 		setOptionSquares({});
-		onDrop(moveFrom as Square, square);
+		onDrop({ piece: null, sourceSquare: moveFrom as string, targetSquare: square });
 	}
 
 	const reset = () => {
@@ -363,15 +373,15 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			{players && color && <PlayerInfo uid={players[color === 'w' ? 'b' : 'w']} />}
 			<div ref={boardContainerRef} className='board-container'>
 				<Chessboard
-					arePiecesDraggable={mode === 'single' || (role === 'participant' && color === turn)}
-					id={1}
-					position={game.fen()}
-					onPieceDrop={mode === 'single' || (role === 'participant' && color === turn) ? onDrop : undefined}
-					onSquareClick={mode === 'single' || (role === 'participant' && color === turn) ? onSquareClick : undefined}
-					boardWidth={boardWidth}
-					boardOrientation={color === 'b' ? 'black' : 'white'}
-					customSquareStyles={{
-						...optionSquares,
+					options={{
+						allowDragging: mode === 'single' || (role === 'participant' && color === turn),
+						id: '1',
+						position: game.fen(),
+						onPieceDrop: mode === 'single' || (role === 'participant' && color === turn) ? onDrop : undefined,
+						onSquareClick: mode === 'single' || (role === 'participant' && color === turn) ? onSquareClick : undefined,
+						boardOrientation: color === 'b' ? 'black' : 'white',
+						squareStyles: optionSquares,
+						boardStyle: { width: boardWidth },
 					}}
 				/>
 			</div>
@@ -393,7 +403,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				</LangLink>
 			</div>
 
-			<div className='pgn-container'>{game.pgn()}</div>
+			<div className='pgn-container'><Moves game={game} /></div>
 			{/* <p>
 				<FormattedMessage id={result} />
 			</p> */}

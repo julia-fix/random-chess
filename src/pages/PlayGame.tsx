@@ -4,7 +4,6 @@ import { updateDoc, DocumentData, onSnapshot, Unsubscribe, DocumentReference, ar
 import Board from '../components/Board';
 import getGame from '../utils/getGame';
 import { FormattedMessage, useIntl } from 'react-intl';
-import { CopyToClipboard } from 'react-copy-to-clipboard';
 import toast from 'react-hot-toast';
 import { UserContext } from '../contexts/UserContext';
 import GameChat from '../components/GameChat';
@@ -12,8 +11,7 @@ import GameChat from '../components/GameChat';
 export default function PlayGame() {
 	const user = useContext(UserContext);
 	const [gameId] = useState<string>(useParams<{ gameId: string }>().gameId || '');
-	// const [playerToken, setPlayerToken] = useState(localStorage.getItem('playerToken'));
-	// const [game, setGame] = useState<DocumentData>();
+
 	const [gameStatus, setGameStatus] = useState<'waiting' | 'playing' | 'finished'>('waiting');
 	const [color, setColor] = useState<'w' | 'b'>();
 	const [role, setRole] = useState<'participant' | 'spectator'>();
@@ -32,7 +30,6 @@ export default function PlayGame() {
 	const [playersPresent, setPlayersPresent] = useState({ w: false, b: false });
 
 	const sendMove = async (move: any, fen: string, pgn: string) => {
-		// console.log('sendMove', move);
 		setLastMove(move);
 		gameMovesRef &&
 			(await updateDoc(gameMovesRef, {
@@ -43,7 +40,6 @@ export default function PlayGame() {
 	};
 
 	const sendFirstCard = async (card: string | number) => {
-		// console.log('sendCard', card);
 		gameDataRef &&
 			(await updateDoc(gameDataRef, {
 				firstCard: card,
@@ -54,72 +50,48 @@ export default function PlayGame() {
 		(updatingData: DocumentData, constantData?: DocumentData) => {
 			if (!updatingData) return;
 
-			// Determining user role and color
 			let currentRole = role;
 			let currentColor = color;
-			let currentPlayerToken = user.uid;
 			let playersArrived = {
 				b: updatingData.blackArrived,
 				w: updatingData.whiteArrived,
 			};
+
 			if (constantData) {
 				if (!currentRole) {
-					if (constantData.white === currentPlayerToken || constantData.black === currentPlayerToken) {
+					if (constantData.white === user.uid || constantData.black === user.uid) {
 						currentRole = 'participant';
-						if (constantData.white === currentPlayerToken) {
-							currentColor = 'w';
-						} else {
-							currentColor = 'b';
-						}
+						currentColor = constantData.white === user.uid ? 'w' : 'b';
 					} else if (!updatingData.whiteArrived) {
 						currentRole = 'participant';
 						currentColor = 'w';
-						// currentPlayerToken = constantData.white;
-						//TODO: add player uid to game data
 					} else if (!updatingData.blackArrived) {
 						currentRole = 'participant';
 						currentColor = 'b';
-						// currentPlayerToken = constantData.black;
-						//TODO: add player uid to game data
 					} else {
 						currentRole = 'spectator';
 					}
 				}
-				// if (currentRole === 'participant' && !currentColor) {
 
-				// }
 				setRole(currentRole);
 				setColor(currentColor);
-				// setPlayerToken(currentPlayerToken);
-				// currentPlayerToken && localStorage.setItem('playerToken', currentPlayerToken);
+
 				if (!updatingData.whiteArrived && currentRole === 'participant' && currentColor === 'w') {
-					// setPlayerArrived('white');
 					playersArrived.w = true;
 				}
 				if (!updatingData.blackArrived && currentRole === 'participant' && currentColor === 'b') {
-					// setPlayerArrived('black');
 					playersArrived.b = true;
 				}
 			}
 
-			// setGame(data);
-			// let status = updatingData.status;
 			if (updatingData.firstCard) setFirstCard(updatingData.firstCard);
-			// console.log('playersArrived', playersArrived);
 			setPlayersPresent(playersArrived);
-			// if (playersArrived.w && playersArrived.b && updatingData.status === 'waiting') {
-			// 	console.log('updating status to playing');
-			// 	status = 'playing';
-			// 	setGameStatusToPlaying();
-			// }
-			// setGameStatus(status);
 		},
 		[color, role, user.uid]
 	);
 
 	const setupMove = (data: DocumentData) => {
 		if (!data) return;
-		// setGame(data);
 		if (data.fen) setFen(data.fen);
 		if (data.pgn) setPgn(data.pgn);
 		if (data.moves) setLastMove(data.moves[data.moves.length - 1]);
@@ -132,38 +104,37 @@ export default function PlayGame() {
 			setGameDataRef(gameParts.gameDataRef);
 			setGameMovesRef(gameParts.movesDataRef);
 			setGameGameRef(gameParts.gameRef);
+
 			gameParts.gameData && setupPlayer(gameParts.gameData, gameParts.game);
 			gameParts.movesData && setupMove(gameParts.movesData);
 
 			setBoardReady(true);
 
 			if (gameParts.gameDataRef) {
-				unsubGameData = onSnapshot(gameParts.gameDataRef, (dataSnap) => {
-					const data = dataSnap.data();
-					// console.log('Current gameData data: ', data);
+				unsubGameData = onSnapshot(gameParts.gameDataRef, (snap) => {
+					const data = snap.data();
 					data && setupPlayer(data);
 				});
 			}
 
 			if (gameParts.movesDataRef) {
-				unsubGameMoves = onSnapshot(gameParts.movesDataRef, (movesSnap) => {
-					const moves = movesSnap.data();
-					// console.log('Current moves: ', moves);
+				unsubGameMoves = onSnapshot(gameParts.movesDataRef, (snap) => {
+					const moves = snap.data();
 					moves && setupMove(moves);
 				});
 			}
 
 			if (gameParts.gameRef) {
-				unsubGameGame = onSnapshot(gameParts.gameRef, (gameSnap) => {
-					const game = gameSnap.data();
+				unsubGameGame = onSnapshot(gameParts.gameRef, (snap) => {
+					const game = snap.data();
 					if (game) {
 						setPlayers({ w: game.white, b: game.black });
 					}
 				});
 			}
 		});
+
 		return () => {
-			// console.log('unsubscribe');
 			unsubGameData && unsubGameData();
 			unsubGameMoves && unsubGameMoves();
 			unsubGameGame && unsubGameGame();
@@ -172,35 +143,23 @@ export default function PlayGame() {
 
 	const setPlayerArrived = useCallback(
 		async (color: string) => {
-			// console.log('setPlayerArrived', color, gameDataRef);
-			if (!gameDataRef || !gameGameRef || !color) {
-				// console.log('setPlayerArrived error');
-				return;
-			}
+			if (!gameDataRef || !gameGameRef || !color) return;
 			try {
-				let toUpdate = {
+				await updateDoc(gameGameRef, {
 					[`${color}`]: user.uid,
-				};
-				// console.log('toUpdate', toUpdate);
-				await updateDoc(gameGameRef, toUpdate);
-
+				});
 				await updateDoc(gameDataRef, {
 					[`${color}Arrived`]: true,
 				});
-			} catch (e) {
-				// console.log('setPlayerArrived error', e);
-			}
+			} catch (e) { }
 		},
 		[gameDataRef, gameGameRef, user.uid]
 	);
 
 	const setGameStatusToPlaying = useCallback(async () => {
-		// console.log('setGameStatusToPlaying');
 		if (!gameDataRef) return;
 		setGameStatus('playing');
-		await updateDoc(gameDataRef, {
-			status: 'playing',
-		});
+		await updateDoc(gameDataRef, { status: 'playing' });
 	}, [gameDataRef]);
 
 	useEffect(() => {
@@ -210,35 +169,49 @@ export default function PlayGame() {
 	}, [gameDataRef, color, role, gameStatus, setPlayerArrived]);
 
 	useEffect(() => {
-		// console.log('useEffect status', playersPresent, gameStatus);
 		if (gameDataRef && playersPresent.w && playersPresent.b && gameStatus === 'waiting') {
 			setGameStatusToPlaying();
 		}
 	}, [gameDataRef, playersPresent, gameStatus, setGameStatusToPlaying]);
 
+	// 📌 Native copy handler
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(window.location.href);
+			toast.success(intl.formatMessage({ id: 'link_copied' }));
+		} catch {
+			toast.error('Failed to copy');
+		}
+	};
+
 	return (
 		<div style={{ paddingTop: 20 }}>
-			{/* PlayerToken: {playerToken} */}
 			{gameStatus === 'waiting' && (
 				<div>
-					<p>
-						<FormattedMessage id='waiting_for_opponent' />
-					</p>
-					<p>
-						<FormattedMessage id='copy_link_instructions' />
-					</p>
-					<CopyToClipboard text={window.location.href} onCopy={() => toast.success(intl.formatMessage({ id: 'link_copied' }))}>
-						<button className='btn btn-primary'>
-							<FormattedMessage id='copy_link' />
-						</button>
-					</CopyToClipboard>
+					<p><FormattedMessage id='waiting_for_opponent' /></p>
+					<p><FormattedMessage id='copy_link_instructions' /></p>
+
+					<button className='btn btn-primary' onClick={handleCopy}>
+						<FormattedMessage id='copy_link' />
+					</button>
 				</div>
 			)}
+
 			{boardReady && (
-				<>
-					<Board fen={fen} pgn={pgn} lastMove={lastMove} color={color} role={role} sendMove={sendMove} mode='multi' sendFirstCard={sendFirstCard} firstCard={firstCard} players={players} />
-				</>
+				<Board
+					fen={fen}
+					pgn={pgn}
+					lastMove={lastMove}
+					color={color}
+					role={role}
+					sendMove={sendMove}
+					mode='multi'
+					sendFirstCard={sendFirstCard}
+					firstCard={firstCard}
+					players={players}
+				/>
 			)}
+
 			<GameChat gameId={gameId} />
 		</div>
 	);

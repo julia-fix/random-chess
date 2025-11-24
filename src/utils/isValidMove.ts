@@ -1,10 +1,10 @@
 import { numbers, letters, pieces, pawns } from '../utils/cardsList';
-import { ChessInstance, Move } from 'chess.js';
+import { Chess, Move } from 'chess.js';
 
 /**
  * Checks if the move is valid according to selected card
  */
-const isValidMove = (move: Move, cardToCheck: string | number, game: ChessInstance) => {
+const isValidMove = (move: Move, cardToCheck: string | number, game: Chess) => {
 	// console.log('cardToCheck', cardToCheck);
 	// console.log('move', move);
 	if (cardToCheck === 'any') return true;
@@ -28,7 +28,7 @@ const isValidMove = (move: Move, cardToCheck: string | number, game: ChessInstan
 	if (cardToCheck === 'stalemate') {
 		let moveToCheck = game.move(move);
 		if (moveToCheck) {
-			if (game.in_stalemate()) {
+			if (game.isStalemate()) {
 				game.undo();
 				return true;
 			} else {

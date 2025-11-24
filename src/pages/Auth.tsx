@@ -1,76 +1,89 @@
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import { auth } from '../utils/firebase';
-import { useRef, useLayoutEffect, useContext } from 'react';
-import { UserContext } from '../contexts/UserContext';
-import { FormattedMessage, useIntl } from 'react-intl';
+import { useState, useContext } from 'react';
+import { UserContext } from "../contexts/UserContext";
+import { FormattedMessage, useIntl } from "react-intl";
+import { auth } from "../utils/firebase";
+import {
+	GoogleAuthProvider,
+	EmailAuthProvider,
+	PhoneAuthProvider,
+	RecaptchaVerifier,
+	signInWithPopup,
+	signInWithPhoneNumber
+} from "firebase/auth";
 
-import * as firebaseui from 'firebaseui';
-import useScript from 'react-use-scripts';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
-import UserName from '../components/UserName';
-import PageLoading from '../components/PageLoading';
+import PageLoading from "../components/PageLoading";
+import UserName from "../components/UserName";
 
 export default function Auth() {
 	const user = useContext(UserContext);
 	const intl = useIntl();
-	const languageCode = intl.locale || 'ru'; // get from somewhere
-	// get query params from url using react-router-dom
+	const [phone, setPhone] = useState("");
+	const [smsCode, setSmsCode] = useState("");
+	const [confirmationResult, setConfirmationResult] = useState<any>(null);
 
-	const firebaseuiElement = useRef<HTMLDivElement | null>(null);
-	// const recaptchaElement = useRef<HTMLElement | null>(null);
+	const googleLogin = async () => {
+		const provider = new GoogleAuthProvider();
+		await signInWithPopup(auth, provider);
+	};
 
-	const { ready } = useScript({
-		src: `https://www.gstatic.com/firebasejs/ui/6.0.0/firebase-ui-auth__${languageCode}.js`,
-	});
+	const emailLogin = async () => {
+		const provider = new EmailAuthProvider();
+		await signInWithPopup(auth, provider);
+	};
 
-	useLayoutEffect(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		const redirectUrl = urlParams.get('redirectUrl') || '/chess/' + intl.locale;
-		const firebaseUiConfig: firebaseui.auth.Config = {
-			signInOptions: [
-				firebase.auth.GoogleAuthProvider.PROVIDER_ID,
-				firebase.auth.EmailAuthProvider.PROVIDER_ID,
-				{
-					provider: firebase.auth.PhoneAuthProvider.PROVIDER_ID,
-					recaptchaParameters: {
-						type: 'image', // 'audio'
-						size: 'invisible', // 'invisible', 'normal' or 'compact'
-						badge: 'bottomleft', //' bottomright' or 'inline' applies to invisible.
-					},
-				},
-				firebaseui.auth.AnonymousAuthProvider.PROVIDER_ID,
-			],
-			signInFlow: 'popup',
-			signInSuccessUrl: redirectUrl,
-		};
-
-		// console.log('firebase.apps', firebase.apps);
-		if (ready && firebaseuiElement.current && !user.loading && !user.loggedIn) {
-			(window as any).firebase = firebase;
-			// const firebaseuiUMD: typeof firebaseui = (window as any).firebaseui;
-			const ui = firebaseui.auth.AuthUI.getInstance() || new firebaseui.auth.AuthUI(auth);
-			ui.start(firebaseuiElement.current, firebaseUiConfig);
+	const phoneLogin = async () => {
+		if (!window.recaptchaVerifier) {
+			window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha", {
+				size: "invisible",
+			});
 		}
-	}, [ready, user, intl.locale]);
+		const result = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+		setConfirmationResult(result);
+	};
+
+	const confirmSms = async () => {
+		if (!confirmationResult) return;
+		await confirmationResult.confirm(smsCode);
+	};
+
+	if (user.loading) return <PageLoading />;
+
+	if (user.loggedIn)
+		return (
+			<p>
+				<FormattedMessage id="hello" /> <UserName user={user} />
+			</p>
+		);
 
 	return (
-		<>
-			<HelmetProvider>
-				<Helmet>
-					<link type='text/css' rel='stylesheet' href='https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.css' />
-				</Helmet>
-			</HelmetProvider>
-			<div ref={firebaseuiElement} />
-			{user.loading ? (
-				<PageLoading />
-			) : (
-				user.loggedIn && (
-					<p>
-						<FormattedMessage id='hello' /> <UserName user={user} />
-					</p>
-				)
+		<div className="auth-page">
+
+			<button onClick={googleLogin}>Login with Google</button>
+
+			<button onClick={emailLogin}>Login with Email</button>
+
+			{/* Phone auth */}
+			<div>
+				<input
+					placeholder="+12025550123"
+					value={phone}
+					onChange={(e) => setPhone(e.target.value)}
+				/>
+				<button onClick={phoneLogin}>Send SMS</button>
+			</div>
+
+			{confirmationResult && (
+				<div>
+					<input
+						placeholder="SMS Code"
+						value={smsCode}
+						onChange={(e) => setSmsCode(e.target.value)}
+					/>
+					<button onClick={confirmSms}>Confirm</button>
+				</div>
 			)}
-		</>
+
+			<div id="recaptcha"></div>
+		</div>
 	);
 }

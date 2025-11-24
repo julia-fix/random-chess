@@ -1,10 +1,9 @@
-import { ChessInstance } from 'chess.js';
-import { Square } from 'react-chessboard';
+import { Chess, Square } from 'chess.js';
 
 /**
  * Checks if the move is valid according to chess rules
  */
-const checkMovePossibility = (from: Square, to: Square, gameCopy: ChessInstance) => {
+const checkMovePossibility = (from: Square, to: Square, gameCopy: Chess) => {
 	if (!from || !to) return null;
 	const move = gameCopy.move({
 		from: from,

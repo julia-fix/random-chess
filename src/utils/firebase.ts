@@ -1,20 +1,23 @@
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+// optional if you use analytics:
+// import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-	apiKey: process.env.REACT_APP_FIREBASE_apiKey,
-	authDomain: process.env.REACT_APP_FIREBASE_authDomain,
-	projectId: process.env.REACT_APP_FIREBASE_projectId,
-	storageBucket: process.env.REACT_APP_FIREBASE_storageBucket,
-	messagingSenderId: process.env.REACT_APP_FIREBASE_messagingSenderId,
-	appId: process.env.REACT_APP_FIREBASE_appId,
-	measurementId: process.env.REACT_APP_FIREBASE_measurementId,
+	apiKey: import.meta.env.VITE_FIREBASE_apiKey,
+	authDomain: import.meta.env.VITE_FIREBASE_authDomain,
+	projectId: import.meta.env.VITE_FIREBASE_projectId,
+	storageBucket: import.meta.env.VITE_FIREBASE_storageBucket,
+	messagingSenderId: import.meta.env.VITE_FIREBASE_messagingSenderId,
+	appId: import.meta.env.VITE_FIREBASE_appId,
+	measurementId: import.meta.env.VITE_FIREBASE_measurementId,
 };
 
-// Initialize Firebase and Firestore
-const app = firebase.initializeApp(firebaseConfig);
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
-const db = firebase.firestore(app);
-export { db };
-export const auth = firebase.auth();
+// Services
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+// export const analytics = getAnalytics(app); // only if needed
