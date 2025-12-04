@@ -1,7 +1,7 @@
 // Logged in user context
 import { auth } from '../utils/firebase';
 import { useEffect, useState, createContext } from 'react';
-import { setDoc, doc, getDoc } from 'firebase/firestore';
+import { setDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 
 export interface UserProps {
@@ -34,7 +34,11 @@ export default function UserProvider({ children }: { children: React.ReactNode }
 				const docSnap = await getDoc(docRef);
 
 				if (docSnap.exists()) {
-					// console.log('Document exist!');
+					// Update missing displayName if it was added later (e.g., after signup)
+					const storedName = docSnap.data().displayName;
+					if (!storedName && user.displayName) {
+						await updateDoc(docRef, { displayName: user.displayName });
+					}
 					return;
 				} else {
 					await setDoc(docRef, {

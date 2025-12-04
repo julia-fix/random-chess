@@ -5,13 +5,14 @@ import { Badge } from 'react-bootstrap';
 import { FormattedMessage } from 'react-intl';
 import { promotionModal } from '../components/promotionModal';
 import { Container as ModalContainer } from 'react-modal-promise';
-import { pieces, cards } from '../utils/cardsList';
-import isValidMove from '../utils/isValidMove';
+import { pieces } from '../utils/cardsList';
 import checkMove from '../utils/checkMove';
 import checkMovePossibility from '../utils/checkMovePossibility';
 import LangLink from './LangLink';
 import PlayerInfo from './PlayerInfo';
 import Moves from './Moves';
+import useBoardSize from '../hooks/useBoardSize';
+import useCardDeck from '../hooks/useCardDeck';
 
 type PromotionType = 'b' | 'n' | 'r' | 'q' | undefined;
 type ShortMove = {
@@ -39,65 +40,22 @@ type Props = {
 	lastMove?: any;
 	firstCard?: string | number;
 	players?: { w: string | null; b: string | null };
+	shareControl?: React.ReactNode;
 };
 
-function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard, players }: Props) {
+function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard, players, shareControl }: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	const [game] = useState<Chess>(new Chess());
 	const [gameCopy] = useState<Chess>(new Chess());
-	const [card, setCard] = useState<string | number>('');
 	const [moveFrom, setMoveFrom] = useState('');
 	const [turn, setTurn] = useState<string>('w');
-	const [boardWidth, setBoardWidth] = useState(400);
 	const boardContainerRef = useRef<HTMLDivElement>(null);
-	const [cardsHistory, setCardsHistory] = useState<Array<string | number>>([]);
 	const [result, setResult] = useState<string>('game_going');
 	const [knownLastMove, setKnownLastMove] = useState<any>();
 	const [inited, setInited] = useState(false);
-	const [cardsRemained, setCardsRemained] = useState(cards);
-
-	const calcBoardWidth = () => {
-		if (boardContainerRef.current) {
-			let boardWidth = boardContainerRef.current.clientWidth;
-			if (boardWidth > 500) boardWidth = 500;
-			setBoardWidth(boardWidth);
-		} else {
-			setBoardWidth(400);
-		}
-	};
-
-	const selectCard = useCallback(
-		function () {
-			let newCard: string | number;
-			let cardPossible = false;
-			let cardsRemainedCopy = [...cardsRemained];
-			do {
-				newCard = cardsRemainedCopy[Math.floor(Math.random() * cardsRemainedCopy.length)];
-				let newCardCopy = newCard;
-				// delete first occurence of newCard from cardsRemainedCopy
-				cardsRemainedCopy = cardsRemainedCopy.filter(function (card) {
-					return card !== newCardCopy;
-				});
-				if (!cardsRemainedCopy.length) {
-					cardsRemainedCopy = [...cards];
-				}
-				const possibleMoves = game.moves({ verbose: true });
-				for (const move of possibleMoves) {
-					if (isValidMove(move, newCard, gameCopy)) {
-						cardPossible = true;
-						break;
-					}
-				}
-			} while (!cardPossible);
-			setCardsRemained(cardsRemainedCopy);
-			if (mode === 'single') {
-				cardsHistory.push(newCard);
-			}
-			return newCard;
-		},
-		[cardsHistory, game, gameCopy, mode, cardsRemained]
-	);
+	const boardWidth = useBoardSize(boardContainerRef);
+	const { card, setCard, drawCard, resetDeck, revertCard, cardsHistory } = useCardDeck(mode, game, gameCopy);
 
 	const opponentMove = useCallback(
 		(receivedMove: any) => {
@@ -122,8 +80,6 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	);
 
 	useEffect(() => {
-		calcBoardWidth();
-		window.addEventListener('resize', calcBoardWidth);
 		if (!inited) {
 			if (fen) {
 				game.load(fen);
@@ -134,23 +90,19 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				gameCopy.loadPgn(pgn);
 			}
 			if (mode === 'single') {
-				setCard(selectCard());
+				drawCard();
 			} else {
 				if (lastMove) {
 					// console.log('setting card to last move', lastMove);
 					setCard(lastMove.nextCard);
 				} else if (color === 'w' && !firstCard) {
-					const newCard = selectCard();
-					setCard(newCard);
+					const newCard = drawCard();
 					sendFirstCard && sendFirstCard(newCard);
 				}
 			}
 			setInited(true);
-			return () => {
-				window.removeEventListener('resize', calcBoardWidth);
-			};
 		}
-	}, [color, fen, pgn, mode, lastMove, firstCard, sendFirstCard, gameCopy, game, selectCard, inited]);
+	}, [color, fen, pgn, mode, lastMove, firstCard, sendFirstCard, gameCopy, game, drawCard, inited, setCard]);
 
 	useEffect(() => {
 		if (firstCard && !card && !lastMove) setCard(firstCard);
@@ -189,7 +141,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			// console.log('gameCopy moved');
 			let nextCard;
 			if (!game.isGameOver()) {
-				nextCard = selectCard();
+				nextCard = drawCard();
 			} else {
 				nextCard = 0;
 			}
@@ -213,6 +165,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			});
 			// console.log('game pgn', game.pgn());
 			// console.log('gamecopy pgn', gameCopy.pgn());
+			setMoveFrom('');
+			setOptionSquares({});
 		}
 
 		if (game.isGameOver()) {
@@ -272,6 +226,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			verbose: true,
 		});
 		if (moves.length === 0) {
+			setOptionSquares({});
 			return;
 		}
 
@@ -290,7 +245,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		setOptionSquares(newSquares);
 	}
 
-	function onSquareClick({ square }: { piece: any; square: string }) {
+	function handleSquareSelect({ square }: { piece: any; square: string }) {
 		const squareTyped = square as Square;
 		function resetFirstMove(square: Square) {
 			setMoveFrom(square);
@@ -299,6 +254,14 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 
 		// from square
 		if (!moveFrom) {
+			resetFirstMove(squareTyped);
+			return;
+		}
+
+		// allow reselecting another piece directly
+		const selectedPiece = game.get(moveFrom as Square);
+		const nextPiece = game.get(squareTyped);
+		if (nextPiece && selectedPiece && nextPiece.color === selectedPiece.color) {
 			resetFirstMove(squareTyped);
 			return;
 		}
@@ -313,6 +276,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		}
 		setOptionSquares({});
 		onDrop({ piece: null, sourceSquare: moveFrom as string, targetSquare: square });
+		setMoveFrom('');
 	}
 
 	const reset = () => {
@@ -320,8 +284,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		gameCopy.reset();
 		setTurn(game.turn());
 		setOptionSquares({});
-		setCardsHistory([]);
-		setCard(selectCard());
+		resetDeck();
 
 		setResult('game_going');
 	};
@@ -332,13 +295,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		setTurn(game.turn());
 		setOptionSquares({});
 		setResult('game_going');
-		if (cardsHistory.length > 1) {
-			// console.log('back', cardsHistory);
-			setCard(cardsHistory[cardsHistory.length - 2]);
-			setCardsHistory(cardsHistory.slice(0, -1));
-		} else {
-			setCard(cardsHistory[0]);
-		}
+		revertCard();
 	};
 
 	// const onPieceDragBegin = (piece: any, sourceSquare: any) => {
@@ -375,10 +332,11 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 				<Chessboard
 					options={{
 						allowDragging: mode === 'single' || (role === 'participant' && color === turn),
-						id: '1',
+						id: 'random-chess-board',
 						position: game.fen(),
 						onPieceDrop: mode === 'single' || (role === 'participant' && color === turn) ? onDrop : undefined,
-						onSquareClick: mode === 'single' || (role === 'participant' && color === turn) ? onSquareClick : undefined,
+						onSquareClick: mode === 'single' || (role === 'participant' && color === turn) ? handleSquareSelect : undefined,
+						onPieceClick: mode === 'single' || (role === 'participant' && color === turn) ? handleSquareSelect : undefined,
 						boardOrientation: color === 'b' ? 'black' : 'white',
 						squareStyles: optionSquares,
 						boardStyle: { width: boardWidth },
@@ -398,9 +356,10 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 						<FormattedMessage id='new_game' />
 					</button>
 				)}{' '}
-				<LangLink to='/' className='btn btn-primary' style={{ marginBottom: 15 }}>
+				<LangLink to='/' className='btn btn-primary' style={{ marginBottom: 15, marginRight: 10 }}>
 					<FormattedMessage id='to_main' />
 				</LangLink>
+				{shareControl}
 			</div>
 
 			<div className='pgn-container'><Moves game={game} /></div>

@@ -7,6 +7,7 @@ import { FormattedMessage, useIntl } from 'react-intl';
 import toast from 'react-hot-toast';
 import { UserContext } from '../contexts/UserContext';
 import GameChat from '../components/GameChat';
+import ShareGame from '../components/ShareGame';
 
 export default function PlayGame() {
 	const user = useContext(UserContext);
@@ -28,6 +29,7 @@ export default function PlayGame() {
 	const [firstCard, setFirstCard] = useState<string | number>();
 	const [boardReady, setBoardReady] = useState(false);
 	const [playersPresent, setPlayersPresent] = useState({ w: false, b: false });
+	const bothArrived = playersPresent.w && playersPresent.b;
 
 	const sendMove = async (move: any, fen: string, pgn: string) => {
 		setLastMove(move);
@@ -53,8 +55,8 @@ export default function PlayGame() {
 			let currentRole = role;
 			let currentColor = color;
 			let playersArrived = {
-				b: updatingData.blackArrived,
-				w: updatingData.whiteArrived,
+				b: !!updatingData.blackArrived,
+				w: !!updatingData.whiteArrived,
 			};
 
 			if (constantData) {
@@ -75,13 +77,6 @@ export default function PlayGame() {
 
 				setRole(currentRole);
 				setColor(currentColor);
-
-				if (!updatingData.whiteArrived && currentRole === 'participant' && currentColor === 'w') {
-					playersArrived.w = true;
-				}
-				if (!updatingData.blackArrived && currentRole === 'participant' && currentColor === 'b') {
-					playersArrived.b = true;
-				}
 			}
 
 			if (updatingData.firstCard) setFirstCard(updatingData.firstCard);
@@ -174,27 +169,23 @@ export default function PlayGame() {
 		}
 	}, [gameDataRef, playersPresent, gameStatus, setGameStatusToPlaying]);
 
-	// 📌 Native copy handler
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(window.location.href);
-			toast.success(intl.formatMessage({ id: 'link_copied' }));
-		} catch {
-			toast.error('Failed to copy');
-		}
-	};
 
 	return (
 		<div style={{ paddingTop: 20 }}>
-			{gameStatus === 'waiting' && (
+
+
+			{!bothArrived && (
 				<div>
 					<p><FormattedMessage id='waiting_for_opponent' /></p>
 					<p><FormattedMessage id='copy_link_instructions' /></p>
+					<div style={{ marginBottom: 16 }}>
+						<ShareGame title={intl.formatMessage({ id: 'invite_opponent' })} />
+					</div>
 
-					<button className='btn btn-primary' onClick={handleCopy}>
-						<FormattedMessage id='copy_link' />
-					</button>
 				</div>
+			)}
+			{bothArrived && (
+				<div><p>Both arrived</p></div>
 			)}
 
 			{boardReady && (
@@ -209,6 +200,15 @@ export default function PlayGame() {
 					sendFirstCard={sendFirstCard}
 					firstCard={firstCard}
 					players={players}
+					shareControl={
+						bothArrived ? (
+							<ShareGame
+								title={intl.formatMessage({ id: 'invite_opponent' })}
+								url={typeof window !== 'undefined' ? window.location.href : undefined}
+								compact
+							/>
+						) : undefined
+					}
 				/>
 			)}
 
