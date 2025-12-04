@@ -1,26 +1,39 @@
-import { doc, DocumentData, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import UserName from './UserName';
 
+type PlayerDoc = {
+	displayName?: string | null;
+	isAnonymous?: boolean;
+	photoURL?: string | null;
+	uid?: string | null;
+};
+
 export default function PlayerInfo({ uid }: { uid: string | null }) {
-	const [player, setPlayer] = useState<DocumentData>();
+	const [player, setPlayer] = useState<PlayerDoc | null>(null);
+	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
-		const getData = async () => {
-			if (uid) {
-				const docRef = doc(db, 'players', uid);
-				const docSnap = await getDoc(docRef);
-				if (docSnap.exists()) {
-					const data = docSnap.data();
-					// console.log(data);
-					setPlayer(data);
+		if (!uid) return;
+		const docRef = doc(db, 'players', uid);
+		const unsub = onSnapshot(
+			docRef,
+			(snap) => {
+				if (snap.exists()) {
+					setPlayer(snap.data() as PlayerDoc);
+					setError(null);
+				} else {
+					setPlayer(null);
+					setError('not_found');
 				}
+			},
+			(err) => {
+				setError(err.message);
 			}
-		};
-
-		getData();
+		);
+		return () => unsub();
 	}, [uid]);
 
 	return (
@@ -33,6 +46,7 @@ export default function PlayerInfo({ uid }: { uid: string | null }) {
 					</div>
 				</div>
 			)}
+			{!player && error && <div className='text-muted' style={{ fontSize: 12 }}>Player unavailable</div>}
 		</>
 	);
 }

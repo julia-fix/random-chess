@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import { useParams } from 'react-router';
-import { updateDoc, DocumentData, onSnapshot, Unsubscribe, DocumentReference, arrayUnion } from 'firebase/firestore';
+import { updateDoc, arrayUnion } from 'firebase/firestore';
 import Board from '../components/Board';
-import getGame from '../utils/getGame';
 import { FormattedMessage, useIntl } from 'react-intl';
 import toast from 'react-hot-toast';
 import { UserContext } from '../contexts/UserContext';
 import GameChat from '../components/GameChat';
 import ShareGame from '../components/ShareGame';
+import useGameSession from '../hooks/useGameSession';
 
 export default function PlayGame() {
 	const user = useContext(UserContext);
@@ -23,22 +23,40 @@ export default function PlayGame() {
 
 	const intl = useIntl();
 
-	const [gameDataRef, setGameDataRef] = useState<DocumentReference>();
-	const [gameMovesRef, setGameMovesRef] = useState<DocumentReference>();
-	const [gameGameRef, setGameGameRef] = useState<DocumentReference>();
+	const { game, gameData, moves, gameDataRef, movesRef, gameRef, loading: sessionLoading } = useGameSession(gameId);
 	const [firstCard, setFirstCard] = useState<string | number>();
 	const [boardReady, setBoardReady] = useState(false);
-	const [playersPresent, setPlayersPresent] = useState({ w: false, b: false });
+
+	const playersPresent = useMemo(
+		() => ({
+			w: !!gameData?.whiteArrived,
+			b: !!gameData?.blackArrived,
+		}),
+		[gameData?.whiteArrived, gameData?.blackArrived]
+	);
 	const bothArrived = playersPresent.w && playersPresent.b;
 
+	const sanitize = (value: any): any => {
+		if (Array.isArray(value)) return value.map(sanitize);
+		if (value && typeof value === 'object') {
+			const cleaned: any = {};
+			Object.entries(value).forEach(([k, v]) => {
+				if (v !== undefined) cleaned[k] = sanitize(v);
+			});
+			return cleaned;
+		}
+		return value;
+	};
+
 	const sendMove = async (move: any, fen: string, pgn: string) => {
-		setLastMove(move);
-		gameMovesRef &&
-			(await updateDoc(gameMovesRef, {
-				moves: arrayUnion(move),
-				fen,
-				pgn,
-			}));
+		const safeMove = sanitize(move);
+		setLastMove(safeMove);
+		if (!movesRef) return;
+		await updateDoc(movesRef, {
+			moves: arrayUnion(safeMove),
+			fen,
+			pgn,
+		});
 	};
 
 	const sendFirstCard = async (card: string | number) => {
@@ -49,98 +67,62 @@ export default function PlayGame() {
 	};
 
 	const setupPlayer = useCallback(
-		(updatingData: DocumentData, constantData?: DocumentData) => {
-			if (!updatingData) return;
+		(updatingData?: GameDataDoc, constantData?: GameDoc) => {
+			if (!updatingData || !constantData) return;
 
 			let currentRole = role;
 			let currentColor = color;
-			let playersArrived = {
-				b: !!updatingData.blackArrived,
-				w: !!updatingData.whiteArrived,
-			};
 
-			if (constantData) {
-				if (!currentRole) {
-					if (constantData.white === user.uid || constantData.black === user.uid) {
-						currentRole = 'participant';
-						currentColor = constantData.white === user.uid ? 'w' : 'b';
-					} else if (!updatingData.whiteArrived) {
-						currentRole = 'participant';
-						currentColor = 'w';
-					} else if (!updatingData.blackArrived) {
-						currentRole = 'participant';
-						currentColor = 'b';
-					} else {
-						currentRole = 'spectator';
-					}
+			if (!currentRole) {
+				if (constantData.white === user.uid || constantData.black === user.uid) {
+					currentRole = 'participant';
+					currentColor = constantData.white === user.uid ? 'w' : 'b';
+				} else if (!updatingData.whiteArrived) {
+					currentRole = 'participant';
+					currentColor = 'w';
+				} else if (!updatingData.blackArrived) {
+					currentRole = 'participant';
+					currentColor = 'b';
+				} else {
+					currentRole = 'spectator';
 				}
-
-				setRole(currentRole);
-				setColor(currentColor);
 			}
 
+			setRole(currentRole);
+			setColor(currentColor);
+
 			if (updatingData.firstCard) setFirstCard(updatingData.firstCard);
-			setPlayersPresent(playersArrived);
 		},
 		[color, role, user.uid]
 	);
 
-	const setupMove = (data: DocumentData) => {
-		if (!data) return;
-		if (data.fen) setFen(data.fen);
-		if (data.pgn) setPgn(data.pgn);
-		if (data.moves) setLastMove(data.moves[data.moves.length - 1]);
-	};
+	useEffect(() => {
+		if (game) {
+			setPlayers({ w: game.white ?? null, b: game.black ?? null });
+		}
+	}, [game]);
 
 	useEffect(() => {
-		let unsubGameData: Unsubscribe, unsubGameMoves: Unsubscribe, unsubGameGame: Unsubscribe;
+		if (moves) {
+			if (moves.fen) setFen(moves.fen);
+			if (moves.pgn) setPgn(moves.pgn);
+			if (moves.moves?.length) setLastMove(moves.moves[moves.moves.length - 1]);
+		}
+	}, [moves]);
 
-		getGame(gameId).then((gameParts) => {
-			setGameDataRef(gameParts.gameDataRef);
-			setGameMovesRef(gameParts.movesDataRef);
-			setGameGameRef(gameParts.gameRef);
-
-			gameParts.gameData && setupPlayer(gameParts.gameData, gameParts.game);
-			gameParts.movesData && setupMove(gameParts.movesData);
-
-			setBoardReady(true);
-
-			if (gameParts.gameDataRef) {
-				unsubGameData = onSnapshot(gameParts.gameDataRef, (snap) => {
-					const data = snap.data();
-					data && setupPlayer(data);
-				});
-			}
-
-			if (gameParts.movesDataRef) {
-				unsubGameMoves = onSnapshot(gameParts.movesDataRef, (snap) => {
-					const moves = snap.data();
-					moves && setupMove(moves);
-				});
-			}
-
-			if (gameParts.gameRef) {
-				unsubGameGame = onSnapshot(gameParts.gameRef, (snap) => {
-					const game = snap.data();
-					if (game) {
-						setPlayers({ w: game.white, b: game.black });
-					}
-				});
-			}
-		});
-
-		return () => {
-			unsubGameData && unsubGameData();
-			unsubGameMoves && unsubGameMoves();
-			unsubGameGame && unsubGameGame();
-		};
-	}, [gameId, setupPlayer]);
+	useEffect(() => {
+		if (gameData) {
+			if (gameData.status) setGameStatus(gameData.status);
+			setupPlayer(gameData, game);
+			if (!boardReady) setBoardReady(true);
+		}
+	}, [gameData, game, setupPlayer, boardReady]);
 
 	const setPlayerArrived = useCallback(
 		async (color: string) => {
-			if (!gameDataRef || !gameGameRef || !color) return;
+			if (!gameDataRef || !gameRef || !color || !user.uid) return;
 			try {
-				await updateDoc(gameGameRef, {
+				await updateDoc(gameRef, {
 					[`${color}`]: user.uid,
 				});
 				await updateDoc(gameDataRef, {
@@ -148,7 +130,7 @@ export default function PlayGame() {
 				});
 			} catch (e) { }
 		},
-		[gameDataRef, gameGameRef, user.uid]
+		[gameDataRef, gameRef, user.uid]
 	);
 
 	const setGameStatusToPlaying = useCallback(async () => {

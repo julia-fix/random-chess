@@ -10,8 +10,6 @@ import {
 	signInWithEmailAndPassword,
 	createUserWithEmailAndPassword,
 	updateProfile,
-	RecaptchaVerifier,
-	signInWithPhoneNumber,
 } from 'firebase/auth';
 import '@firebase-oss/ui-styles/dist.min.css';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -26,9 +24,6 @@ export default function Auth() {
 	const [password, setPassword] = useState('');
 	const [displayName, setDisplayName] = useState('');
 	const [emailExists, setEmailExists] = useState<boolean | null>(null);
-	const [phone, setPhone] = useState('');
-	const [smsCode, setSmsCode] = useState('');
-	const [confirmationResult, setConfirmationResult] = useState<any>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const location = useLocation();
@@ -49,11 +44,6 @@ export default function Auth() {
 		setEmailExists(null);
 		setPassword('');
 		setDisplayName('');
-	};
-
-	const resetPhoneFlow = () => {
-		setConfirmationResult(null);
-		setSmsCode('');
 	};
 
 	const handleGuest = async () => {
@@ -119,37 +109,6 @@ export default function Auth() {
 			}
 		} catch (e: any) {
 			setError(e?.message || 'Email sign-up failed');
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const sendSms = async () => {
-		setError(null);
-		setLoading(true);
-		try {
-			if (!(window as any).recaptchaVerifier) {
-				(window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha', {
-					size: 'invisible',
-				});
-			}
-			const result = await signInWithPhoneNumber(auth, phone, (window as any).recaptchaVerifier);
-			setConfirmationResult(result);
-		} catch (e: any) {
-			setError(e?.message || 'SMS send failed');
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const confirmSms = async () => {
-		if (!confirmationResult) return;
-		setError(null);
-		setLoading(true);
-		try {
-			await confirmationResult.confirm(smsCode);
-		} catch (e: any) {
-			setError(e?.message || 'SMS confirmation failed');
 		} finally {
 			setLoading(false);
 		}
@@ -249,47 +208,6 @@ export default function Auth() {
 										/>
 										<button className='btn btn-danger' onClick={signupEmail} disabled={!password || loading}>
 											<FormattedMessage id='auth.email.signup' defaultMessage='Create account' />
-										</button>
-									</>
-								)}
-							</div>
-						)}
-
-						<button
-							className='btn btn-success btn-lg'
-							onClick={() => {
-								const next = mode === 'phone' ? 'idle' : 'phone';
-								setMode(next);
-								resetPhoneFlow();
-							}}
-						>
-							<FormattedMessage id='auth.phone.button' defaultMessage='Sign in with phone' />
-						</button>
-
-						{mode === 'phone' && (
-							<div className='d-grid gap-2'>
-								<input
-									type='tel'
-									className='form-control form-control-lg'
-									placeholder='+12025550123'
-									value={phone}
-									onChange={(e) => setPhone(e.target.value)}
-								/>
-								{!confirmationResult ? (
-									<button className='btn btn-success' onClick={sendSms} disabled={!phone || loading}>
-										<FormattedMessage id='auth.phone.send' defaultMessage='Send SMS' />
-									</button>
-								) : (
-									<>
-										<input
-											type='text'
-											className='form-control form-control-lg'
-											placeholder='SMS Code'
-											value={smsCode}
-											onChange={(e) => setSmsCode(e.target.value)}
-										/>
-										<button className='btn btn-success' onClick={confirmSms} disabled={!smsCode || loading}>
-											<FormattedMessage id='auth.phone.confirm' defaultMessage='Confirm code' />
 										</button>
 									</>
 								)}

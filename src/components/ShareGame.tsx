@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FormattedMessage } from 'react-intl';
 import { WhatsappShareButton, TelegramShareButton, WhatsappIcon, TelegramIcon } from 'react-share';
+import { GiShare } from 'react-icons/gi';
 
 type ShareGameProps = {
 	url?: string;
@@ -38,28 +39,29 @@ export default function ShareGame({ url, title = 'Random Chess game', compact = 
 		}
 	};
 
+	const containerClass = compact ? 'd-flex gap-2 align-items-center flex-wrap' : 'd-grid gap-2';
+
 	return (
-		<div className='d-grid gap-2'>
-			{!supportsShare ? (
+		<div className={containerClass}>
+			{supportsShare ? (
 				<>
 					<button className={`btn ${compact ? 'btn-outline-secondary btn-sm' : 'btn-secondary'}`} onClick={handleShare} aria-label='Share game'>
-						{compact ? '↗' : 'Share game'}
+						{compact ? <GiShare /> : 'Share game'}
 					</button>
 					{status && <span>{status}</span>}
 				</>
 			) : (
-				<div className='d-flex gap-2 align-items-center flex-wrap'>
+				<>
 					<WhatsappShareButton url={shareUrl} title={title}>
 						<WhatsappIcon size={40} round />
 					</WhatsappShareButton>
 					<TelegramShareButton url={shareUrl} title={title}>
 						<TelegramIcon size={40} round />
 					</TelegramShareButton>
-
 					{status && <span>{status}</span>}
-				</div>
+				</>
 			)}
-			<button className='btn btn-outline-secondary' onClick={copyLink}>
+			<button className={`btn ${compact ? 'btn-outline-secondary btn-sm' : 'btn-outline-secondary'}`} onClick={copyLink}>
 				<FormattedMessage id='copy_link' />
 			</button>
 		</div>

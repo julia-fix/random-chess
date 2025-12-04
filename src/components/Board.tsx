@@ -8,6 +8,7 @@ import { Container as ModalContainer } from 'react-modal-promise';
 import { pieces } from '../utils/cardsList';
 import checkMove from '../utils/checkMove';
 import checkMovePossibility from '../utils/checkMovePossibility';
+import isValidMove from '../utils/isValidMove';
 import LangLink from './LangLink';
 import PlayerInfo from './PlayerInfo';
 import Moves from './Moves';
@@ -46,16 +47,34 @@ type Props = {
 function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard, players, shareControl }: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
-	const [game] = useState<Chess>(new Chess());
-	const [gameCopy] = useState<Chess>(new Chess());
+	const gameRef = useRef<Chess>(new Chess());
+	const gameCopyRef = useRef<Chess>(new Chess());
+	const game = gameRef.current;
+	const gameCopy = gameCopyRef.current;
 	const [moveFrom, setMoveFrom] = useState('');
 	const [turn, setTurn] = useState<string>('w');
 	const boardContainerRef = useRef<HTMLDivElement>(null);
 	const [result, setResult] = useState<string>('game_going');
 	const [knownLastMove, setKnownLastMove] = useState<any>();
 	const [inited, setInited] = useState(false);
+	const cardInitRef = useRef(false);
+	const loadedFenRef = useRef<string | undefined>();
+	const loadedPgnRef = useRef<string | undefined>();
 	const boardWidth = useBoardSize(boardContainerRef);
 	const { card, setCard, drawCard, resetDeck, revertCard, cardsHistory } = useCardDeck(mode, game, gameCopy);
+	const [optionSquares, setOptionSquares] = useState({});
+
+	const getAllowedMoves = useCallback(
+		(square: Square) => {
+			const moves = gameCopy.moves({
+				square,
+				verbose: true,
+			});
+			if (!card && card !== 0) return [];
+			return moves.filter((move) => isValidMove(move, card, gameCopy));
+		},
+		[card, gameCopy]
+	);
 
 	const opponentMove = useCallback(
 		(receivedMove: any) => {
@@ -80,26 +99,43 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	);
 
 	useEffect(() => {
-		if (!inited) {
-			if (fen) {
-				game.load(fen);
-				gameCopy.load(fen);
+		const fenChanged = fen && fen !== loadedFenRef.current;
+		const pgnChanged = pgn && pgn !== loadedPgnRef.current;
+		if (!inited || fenChanged || pgnChanged) {
+			try {
+				game.reset();
+				gameCopy.reset();
+				if (pgn) {
+					game.loadPgn(pgn);
+					gameCopy.loadPgn(pgn);
+					loadedPgnRef.current = pgn;
+					loadedFenRef.current = game.fen();
+				} else if (fen) {
+					game.load(fen);
+					gameCopy.load(fen);
+					loadedFenRef.current = fen;
+					loadedPgnRef.current = undefined;
+				}
+			} catch (e) {
+				game.reset();
+				gameCopy.reset();
+				loadedFenRef.current = undefined;
+				loadedPgnRef.current = undefined;
+				console.warn('Invalid FEN/PGN provided, resetting game.', e);
 			}
-			if (pgn) {
-				game.loadPgn(pgn);
-				gameCopy.loadPgn(pgn);
-			}
-			if (mode === 'single') {
+
+			if (mode === 'single' && !cardInitRef.current) {
 				drawCard();
-			} else {
+				cardInitRef.current = true;
+			} else if (mode === 'multi') {
 				if (lastMove) {
-					// console.log('setting card to last move', lastMove);
 					setCard(lastMove.nextCard);
 				} else if (color === 'w' && !firstCard) {
 					const newCard = drawCard();
 					sendFirstCard && sendFirstCard(newCard);
 				}
 			}
+			setTurn(game.turn());
 			setInited(true);
 		}
 	}, [color, fen, pgn, mode, lastMove, firstCard, sendFirstCard, gameCopy, game, drawCard, inited, setCard]);
@@ -112,6 +148,9 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	useEffect(() => {
 		// console.log('lastMove changed', lastMove, knownLastMove);
 		if (lastMove) {
+			if (lastMove.moveIndex && lastMove.moveIndex <= game.history().length) {
+				return;
+			}
 			if (!knownLastMove || lastMove.moveIndex !== knownLastMove.moveIndex) {
 				setKnownLastMove(lastMove);
 				opponentMove(lastMove);
@@ -218,13 +257,8 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		}
 	}
 
-	const [optionSquares, setOptionSquares] = useState({});
-
 	function getMoveOptions(square: Square) {
-		const moves = game.moves({
-			square,
-			verbose: true,
-		});
+		const moves = getAllowedMoves(square);
 		if (moves.length === 0) {
 			setOptionSquares({});
 			return;
@@ -252,8 +286,15 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 			getMoveOptions(square);
 		}
 
+		const allowedMoves = getAllowedMoves(squareTyped);
+
 		// from square
 		if (!moveFrom) {
+			if (!allowedMoves.length) {
+				setMoveFrom('');
+				setOptionSquares({});
+				return;
+			}
 			resetFirstMove(squareTyped);
 			return;
 		}
@@ -262,6 +303,11 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 		const selectedPiece = game.get(moveFrom as Square);
 		const nextPiece = game.get(squareTyped);
 		if (nextPiece && selectedPiece && nextPiece.color === selectedPiece.color) {
+			if (!allowedMoves.length) {
+				setMoveFrom('');
+				setOptionSquares({});
+				return;
+			}
 			resetFirstMove(squareTyped);
 			return;
 		}
