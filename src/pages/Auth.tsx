@@ -217,7 +217,6 @@ export default function Auth() {
 						<button className='btn btn-warning btn-lg' onClick={handleGuest} disabled={loading}>
 							<FormattedMessage id='auth.guest' defaultMessage='Continue as guest' />
 						</button>
-						<div className='d-none' id='recaptcha' />
 					</div>
 				</div>
 			</div>

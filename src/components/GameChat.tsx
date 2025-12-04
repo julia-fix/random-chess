@@ -72,6 +72,7 @@ export default function GameChat({ gameId }: { gameId: string }) {
 	}, [show, messages, resetUnread]);
 
 	const sendMessage = async (text: string) => {
+		if (!text.trim()) return;
 		if (messagesRef) {
 			await updateDoc(messagesRef, {
 				messages: arrayUnion({

@@ -5,7 +5,8 @@ export default function ChatInput({ sendMessage }: { sendMessage: (text: string)
 	const intl = useIntl();
 	const onSubmit = (e: any) => {
 		e.preventDefault();
-		const text = e.target.elements.text.value;
+		const text = (e.target.elements.text.value as string).trim();
+		if (!text) return;
 		sendMessage(text);
 		e.target.elements.text.value = '';
 	};
