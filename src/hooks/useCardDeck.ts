@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Chess } from 'chess.js';
-import { cards, pieces } from '../utils/cardsList';
-import isValidMove from '../utils/isValidMove';
+import { drawNextCard, initialDeck } from '../utils/cardDeck';
 
 type Mode = 'single' | 'multi';
 
@@ -17,42 +16,21 @@ type CardDeckState = {
 export default function useCardDeck(mode: Mode, game: Chess, gameCopy: Chess): CardDeckState {
 	const [card, setCard] = useState<string | number>('');
 	const [cardsHistory, setCardsHistory] = useState<Array<string | number>>([]);
-	const [cardsRemained, setCardsRemained] = useState(cards);
-
-	const pickCard = useCallback(() => {
-		let newCard: string | number;
-		let cardPossible = false;
-		let cardsRemainedCopy = [...cardsRemained];
-		do {
-			newCard = cardsRemainedCopy[Math.floor(Math.random() * cardsRemainedCopy.length)];
-			const newCardCopy = newCard;
-			cardsRemainedCopy = cardsRemainedCopy.filter((c) => c !== newCardCopy);
-			if (!cardsRemainedCopy.length) {
-				cardsRemainedCopy = [...cards];
-			}
-			const possibleMoves = game.moves({ verbose: true });
-			for (const move of possibleMoves) {
-				if (isValidMove(move, newCard, gameCopy)) {
-					cardPossible = true;
-					break;
-				}
-			}
-		} while (!cardPossible);
-		setCardsRemained(cardsRemainedCopy);
-		return newCard;
-	}, [cardsRemained, game, gameCopy]);
+	const [deck, setDeck] = useState(() => initialDeck());
 
 	const drawCard = useCallback(() => {
-		const newCard = pickCard();
+		const { card: newCard, deck: nextDeck } = drawNextCard(deck, game, gameCopy);
+		setDeck(nextDeck);
 		setCard(newCard);
 		if (mode === 'single') {
 			setCardsHistory((prev) => [...prev, newCard]);
 		}
 		return newCard;
-	}, [pickCard, mode]);
+	}, [deck, game, gameCopy, mode]);
 
 	const resetDeck = useCallback(() => {
 		setCardsHistory([]);
+		setDeck(initialDeck());
 		return drawCard();
 	}, [drawCard]);
 

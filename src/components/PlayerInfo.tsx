@@ -14,10 +14,12 @@ type PlayerDoc = {
 export default function PlayerInfo({ uid }: { uid: string | null }) {
 	const [player, setPlayer] = useState<PlayerDoc | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
 		if (!uid) return;
 		const docRef = doc(db, 'players', uid);
+		setLoading(true);
 		const unsub = onSnapshot(
 			docRef,
 			(snap) => {
@@ -28,9 +30,11 @@ export default function PlayerInfo({ uid }: { uid: string | null }) {
 					setPlayer(null);
 					setError('not_found');
 				}
+				setLoading(false);
 			},
 			(err) => {
 				setError(err.message);
+				setLoading(false);
 			}
 		);
 		return () => unsub();
@@ -38,6 +42,7 @@ export default function PlayerInfo({ uid }: { uid: string | null }) {
 
 	return (
 		<>
+			{loading && <div className='text-muted' style={{ fontSize: 12 }}>Loading...</div>}
 			{player && (
 				<div className='player-data'>
 					<Avatar url={player.photoURL} size={25} />

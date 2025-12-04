@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import { useParams } from 'react-router';
-import { updateDoc, arrayUnion } from 'firebase/firestore';
 import Board from '../components/Board';
 import { FormattedMessage, useIntl } from 'react-intl';
 import toast from 'react-hot-toast';
@@ -8,6 +7,9 @@ import { UserContext } from '../contexts/UserContext';
 import GameChat from '../components/GameChat';
 import ShareGame from '../components/ShareGame';
 import useGameSession from '../hooks/useGameSession';
+import { updateFirstCard, updateMovesDoc, markPlayerArrived, setGameStatus } from '../services/gameService';
+import { GameDataDoc, GameDoc } from '../types/game';
+import PageLoading from '../components/PageLoading';
 
 export default function PlayGame() {
 	const user = useContext(UserContext);
@@ -35,35 +37,15 @@ export default function PlayGame() {
 		[gameData?.whiteArrived, gameData?.blackArrived]
 	);
 	const bothArrived = playersPresent.w && playersPresent.b;
-
-	const sanitize = (value: any): any => {
-		if (Array.isArray(value)) return value.map(sanitize);
-		if (value && typeof value === 'object') {
-			const cleaned: any = {};
-			Object.entries(value).forEach(([k, v]) => {
-				if (v !== undefined) cleaned[k] = sanitize(v);
-			});
-			return cleaned;
-		}
-		return value;
-	};
+	const sessionError = useMemo(() => game === undefined && gameData === undefined && moves === undefined && !sessionLoading, [game, gameData, moves, sessionLoading]);
 
 	const sendMove = async (move: any, fen: string, pgn: string) => {
-		const safeMove = sanitize(move);
-		setLastMove(safeMove);
-		if (!movesRef) return;
-		await updateDoc(movesRef, {
-			moves: arrayUnion(safeMove),
-			fen,
-			pgn,
-		});
+		setLastMove(move);
+		await updateMovesDoc(movesRef, move, fen, pgn);
 	};
 
 	const sendFirstCard = async (card: string | number) => {
-		gameDataRef &&
-			(await updateDoc(gameDataRef, {
-				firstCard: card,
-			}));
+		await updateFirstCard(gameDataRef, card);
 	};
 
 	const setupPlayer = useCallback(
@@ -120,23 +102,14 @@ export default function PlayGame() {
 
 	const setPlayerArrived = useCallback(
 		async (color: string) => {
-			if (!gameDataRef || !gameRef || !color || !user.uid) return;
-			try {
-				await updateDoc(gameRef, {
-					[`${color}`]: user.uid,
-				});
-				await updateDoc(gameDataRef, {
-					[`${color}Arrived`]: true,
-				});
-			} catch (e) { }
+			await markPlayerArrived(gameRef, gameDataRef, color as 'white' | 'black', user.uid);
 		},
 		[gameDataRef, gameRef, user.uid]
 	);
 
 	const setGameStatusToPlaying = useCallback(async () => {
-		if (!gameDataRef) return;
 		setGameStatus('playing');
-		await updateDoc(gameDataRef, { status: 'playing' });
+		await setGameStatus(gameDataRef, 'playing');
 	}, [gameDataRef]);
 
 	useEffect(() => {
@@ -152,9 +125,14 @@ export default function PlayGame() {
 	}, [gameDataRef, playersPresent, gameStatus, setGameStatusToPlaying]);
 
 
+	if (sessionLoading) {
+		return <PageLoading />;
+	}
+
 	return (
 		<div style={{ paddingTop: 20 }}>
 
+			{sessionError && <div className='text-danger p-3'>Unable to load game session.</div>}
 
 			{!bothArrived && (
 				<div>

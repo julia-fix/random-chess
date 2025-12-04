@@ -14,6 +14,8 @@ export default function GameChat({ gameId }: { gameId: string }) {
 	const [show, setShow] = useState(false);
 	const [messages, setMessages] = useState<any[]>();
 	const [unreadCounter, setUnreadCounter] = useState(0);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const user = useContext(UserContext);
 	const [messagesRef, setMessagesRef] = useState<DocumentReference>();
 
@@ -25,15 +27,25 @@ export default function GameChat({ gameId }: { gameId: string }) {
 		const chatRef = doc(db, 'chats', gameId);
 
 		setMessagesRef(chatRef);
-		unsubGameChat = onSnapshot(chatRef, (chatSnap) => {
-			const data = chatSnap.data();
-			if (data) {
-				setMessages(data.messages);
-				// setUnread(data.unread);
-				setUnreadCounter(data.unread[user.uid as string] || 0);
-				// console.log('messages: ', data.messages);
+		unsubGameChat = onSnapshot(
+			chatRef,
+			(chatSnap) => {
+				const data = chatSnap.data();
+				if (data) {
+					setMessages(data.messages);
+					setUnreadCounter(data.unread[user.uid as string] || 0);
+				} else {
+					setMessages([]);
+					setUnreadCounter(0);
+				}
+				setLoading(false);
+				setError(null);
+			},
+			(err) => {
+				setError(err.message);
+				setLoading(false);
 			}
-		});
+		);
 
 		return () => {
 			unsubGameChat && unsubGameChat();
@@ -132,18 +144,22 @@ export default function GameChat({ gameId }: { gameId: string }) {
 					</Offcanvas.Title>
 				</Offcanvas.Header>
 				<Offcanvas.Body className='mob-nav-dark'>
-					<ChatLayout
-						messages={
-							messages &&
-							messages.map((message) => (
-								<div key={message.msgId}>
-									<Message message={message} position={message.author.uid === user.uid ? 'right' : 'left'} />
-								</div>
-							))
-						}
-						input={<ChatInput sendMessage={sendMessage} />}
-						msgCount={messages ? messages.length : 0}
-					/>
+					{loading && <div className='text-muted'><FormattedMessage id='waiting' /></div>}
+					{error && <div className='text-danger'>{error}</div>}
+					{!loading && !error && (
+						<ChatLayout
+							messages={
+								messages &&
+								messages.map((message) => (
+									<div key={message.msgId}>
+										<Message message={message} position={message.author.uid === user.uid ? 'right' : 'left'} />
+									</div>
+								))
+							}
+							input={<ChatInput sendMessage={sendMessage} />}
+							msgCount={messages ? messages.length : 0}
+						/>
+					)}
 				</Offcanvas.Body>
 			</Offcanvas>
 		</>

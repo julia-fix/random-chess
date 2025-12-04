@@ -1,24 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, onSnapshot, DocumentReference, Unsubscribe } from 'firebase/firestore';
 import { db } from '../utils/firebase';
-
-export type GameDoc = {
-	white?: string | null;
-	black?: string | null;
-};
-
-export type GameDataDoc = {
-	status?: 'waiting' | 'playing' | 'finished';
-	whiteArrived?: boolean;
-	blackArrived?: boolean;
-	firstCard?: string | number;
-};
-
-export type GameMovesDoc = {
-	moves?: any[];
-	fen?: string;
-	pgn?: string;
-};
+import { GameDataDoc, GameDoc, GameMovesDoc } from '../types/game';
 
 export type GameSessionState = {
 	game?: GameDoc;
@@ -78,20 +61,35 @@ export default function useGameSession(gameId?: string): GameSessionState {
 
 		loadInitial();
 
-		unsubGame = onSnapshot(refs.gameRef, (snap) => {
-			if (!snap.exists()) return;
-			setState((prev) => ({ ...prev, game: snap.data() as GameDoc, gameRef: refs.gameRef }));
-		});
+		unsubGame = onSnapshot(
+			refs.gameRef,
+			(snap) => {
+				if (!snap.exists()) {
+					setState((prev) => ({ ...prev, error: 'game_not_found', loading: false }));
+					return;
+				}
+				setState((prev) => ({ ...prev, game: snap.data() as GameDoc, gameRef: refs.gameRef, loading: false, error: undefined }));
+			},
+			(error) => setState((prev) => ({ ...prev, error: error.message, loading: false }))
+		);
 
-		unsubGameData = onSnapshot(refs.gameDataRef, (snap) => {
-			if (!snap.exists()) return;
-			setState((prev) => ({ ...prev, gameData: snap.data() as GameDataDoc, gameDataRef: refs.gameDataRef }));
-		});
+		unsubGameData = onSnapshot(
+			refs.gameDataRef,
+			(snap) => {
+				if (!snap.exists()) return;
+				setState((prev) => ({ ...prev, gameData: snap.data() as GameDataDoc, gameDataRef: refs.gameDataRef }));
+			},
+			(error) => setState((prev) => ({ ...prev, error: error.message }))
+		);
 
-		unsubMoves = onSnapshot(refs.movesRef, (snap) => {
-			if (!snap.exists()) return;
-			setState((prev) => ({ ...prev, moves: snap.data() as GameMovesDoc, movesRef: refs.movesRef }));
-		});
+		unsubMoves = onSnapshot(
+			refs.movesRef,
+			(snap) => {
+				if (!snap.exists()) return;
+				setState((prev) => ({ ...prev, moves: snap.data() as GameMovesDoc, movesRef: refs.movesRef }));
+			},
+			(error) => setState((prev) => ({ ...prev, error: error.message }))
+		);
 
 		return () => {
 			cancelled = true;
