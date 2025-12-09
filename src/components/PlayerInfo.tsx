@@ -11,7 +11,7 @@ type PlayerDoc = {
 	uid?: string | null;
 };
 
-export default function PlayerInfo({ uid }: { uid: string | null }) {
+export default function PlayerInfo({ uid, timer, isActive }: { uid: string | null; timer?: string; isActive?: boolean }) {
 	const [player, setPlayer] = useState<PlayerDoc | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -44,11 +44,14 @@ export default function PlayerInfo({ uid }: { uid: string | null }) {
 		<>
 			{loading && <div className='text-muted' style={{ fontSize: 12 }}>Loading...</div>}
 			{player && (
-				<div className='player-data'>
-					<Avatar url={player.photoURL} size={25} />
-					<div className='player-data-name'>
-						<UserName user={player as any} />
+				<div className={`player-info${isActive ? ' player-active' : ''}`}>
+					<div className='player-main'>
+						<Avatar url={player.photoURL} size={25} />
+						<div className='player-name'>
+							<UserName user={player as any} />
+						</div>
 					</div>
+					{timer && <span className='player-timer'>{timer}</span>}
 				</div>
 			)}
 			{!player && error && <div className='text-muted' style={{ fontSize: 12 }}>Player unavailable</div>}

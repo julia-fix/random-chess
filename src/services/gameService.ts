@@ -1,4 +1,4 @@
-import { DocumentReference, updateDoc, arrayUnion } from 'firebase/firestore';
+import { DocumentReference, updateDoc, arrayUnion, serverTimestamp, deleteField } from 'firebase/firestore';
 
 const sanitize = (value: any): any => {
 	if (Array.isArray(value)) return value.map(sanitize);
@@ -41,4 +41,66 @@ export async function markPlayerArrived(
 export async function setGameStatus(gameDataRef: DocumentReference | undefined, status: 'waiting' | 'playing' | 'finished') {
 	if (!gameDataRef) return;
 	await updateDoc(gameDataRef, { status });
+}
+
+export async function finishGame(
+	gameDataRef: DocumentReference | undefined,
+	winner: 'w' | 'b' | null,
+	resultReason: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other'
+) {
+	if (!gameDataRef) return;
+	await updateDoc(gameDataRef, {
+		status: 'finished',
+		winner,
+		resultReason,
+		drawOffer: deleteField(),
+	});
+}
+
+export async function offerDraw(gameDataRef: DocumentReference | undefined, by: 'w' | 'b') {
+	if (!gameDataRef) return;
+	await updateDoc(gameDataRef, { drawOffer: { by } });
+}
+
+export async function clearDrawOffer(gameDataRef: DocumentReference | undefined) {
+	if (!gameDataRef) return;
+	await updateDoc(gameDataRef, { drawOffer: deleteField() });
+}
+
+export async function updateClocksOnMove(
+	gameDataRef: DocumentReference | undefined,
+	movedColor: 'w' | 'b',
+	lastMoveAt: Date | null,
+	whiteTimeLeftMs?: number,
+	blackTimeLeftMs?: number
+) {
+	if (!gameDataRef || whiteTimeLeftMs === undefined || blackTimeLeftMs === undefined) return;
+	const now = Date.now();
+	let elapsed = 0;
+	if (lastMoveAt) {
+		elapsed = now - new Date(lastMoveAt).getTime();
+	}
+	const updated = { whiteTimeLeftMs, blackTimeLeftMs };
+	if (movedColor === 'w') {
+		updated.whiteTimeLeftMs = Math.max(0, whiteTimeLeftMs - elapsed);
+	} else {
+		updated.blackTimeLeftMs = Math.max(0, blackTimeLeftMs - elapsed);
+	}
+	await updateDoc(gameDataRef, {
+		...updated,
+		lastMoveAt: serverTimestamp(),
+	});
+}
+
+export async function setClocksSnapshot(
+	gameDataRef: DocumentReference | undefined,
+	whiteTimeLeftMs?: number,
+	blackTimeLeftMs?: number
+) {
+	if (!gameDataRef || whiteTimeLeftMs === undefined || blackTimeLeftMs === undefined) return;
+	await updateDoc(gameDataRef, {
+		whiteTimeLeftMs,
+		blackTimeLeftMs,
+		lastMoveAt: serverTimestamp(),
+	});
 }

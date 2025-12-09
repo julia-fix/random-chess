@@ -11,10 +11,10 @@ const checkMovePossibility = (from: Square, to: Square, gameCopy: Chess) => {
 			to: to,
 			promotion: 'q',
 		});
-		move && gameCopy.undo();
+		if (!move) return null;
+		gameCopy.undo();
 		return move;
 	} catch (e) {
-		gameCopy.undo();
 		return null;
 	}
 };

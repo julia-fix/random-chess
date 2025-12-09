@@ -39,7 +39,7 @@ export default function ShareGame({ url, title = 'Random Chess game', compact = 
 		}
 	};
 
-	const containerClass = compact ? 'd-flex gap-2 align-items-center flex-wrap' : 'd-grid gap-2';
+	const containerClass = compact ? 'd-flex gap-2 align-items-center flex-wrap' : 'd-flex gap-2 align-items-center flex-wrap share-game-wide';
 
 	return (
 		<div className={containerClass}>

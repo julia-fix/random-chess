@@ -13,6 +13,13 @@ export type GameDataDoc = {
 	blackArrived?: boolean;
 	firstCard?: string | number;
 	gameId?: string;
+	timeLimitMs?: number;
+	whiteTimeLeftMs?: number;
+	blackTimeLeftMs?: number;
+	lastMoveAt?: any;
+	winner?: 'w' | 'b' | null;
+	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other';
+	drawOffer?: { by: 'w' | 'b' };
 };
 
 export type GameMovesDoc = {

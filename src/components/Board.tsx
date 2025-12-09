@@ -1,8 +1,8 @@
 import { Chessboard } from 'react-chessboard';
 import { Chess, Square } from 'chess.js';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Badge } from 'react-bootstrap';
-import { FormattedMessage } from 'react-intl';
+import { FormattedMessage, useIntl } from 'react-intl';
 import { promotionModal } from '../components/promotionModal';
 import { Container as ModalContainer } from 'react-modal-promise';
 import { pieces } from '../utils/cardsList';
@@ -35,6 +35,16 @@ type Props = {
 	pgn?: string;
 	color?: 'w' | 'b';
 	role?: string;
+	timers?: { w?: string; b?: string };
+	gameStatus?: 'waiting' | 'playing' | 'finished';
+	winner?: 'w' | 'b' | null;
+	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other';
+	drawOfferBy?: 'w' | 'b';
+	onResign?: () => void;
+	onOfferDraw?: () => void;
+	onAcceptDraw?: () => void;
+	onDeclineDraw?: () => void;
+	moveList?: any[];
 	sendMove?: (move: any, fen: string, pgn: string) => void;
 	sendFirstCard?: (card: any) => void;
 	mode: 'single' | 'multi';
@@ -44,7 +54,29 @@ type Props = {
 	shareControl?: React.ReactNode;
 };
 
-function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard, firstCard, players, shareControl }: Props) {
+function Board({
+	fen,
+	pgn,
+	role,
+	color,
+	sendMove,
+	mode,
+	lastMove,
+	sendFirstCard,
+	firstCard,
+	players,
+	shareControl,
+	timers,
+	gameStatus,
+	winner,
+	resultReason,
+	drawOfferBy,
+	onResign,
+	onOfferDraw,
+	onAcceptDraw,
+	onDeclineDraw,
+	moveList,
+}: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	const gameRef = useRef<Chess>(new Chess());
@@ -63,6 +95,9 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	const boardWidth = useBoardSize(boardContainerRef);
 	const { card, setCard, drawCard, resetDeck, revertCard, cardsHistory } = useCardDeck(mode, game, gameCopy);
 	const [optionSquares, setOptionSquares] = useState({});
+	const [showResignConfirm, setShowResignConfirm] = useState(false);
+	const [displayFen, setDisplayFen] = useState<string | null>(null);
+	const [viewPly, setViewPly] = useState<number | null>(null);
 
 	const getAllowedMoves = useCallback(
 		(square: Square) => {
@@ -167,6 +202,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	};
 
 	function commitMove(sourceSquare: Square, targetSquare: Square, promotion: PromotionType) {
+		if (gameStatus === 'finished') return;
 		// console.log('commitMove', sourceSquare, targetSquare, promotion);
 		const toMove: ShortMove = {
 			from: sourceSquare,
@@ -216,6 +252,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	}
 
 	function onDrop({ sourceSquare, targetSquare }: { piece: any; sourceSquare: string; targetSquare: string | null }) {
+		if (gameStatus === 'finished') return false;
 		if (!targetSquare) return false;
 		const sourceSquareTyped = sourceSquare as Square;
 		const targetSquareTyped = targetSquare as Square;
@@ -280,6 +317,7 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	}
 
 	function handleSquareSelect({ square }: { piece: any; square: string }) {
+		if (gameStatus === 'finished') return;
 		const squareTyped = square as Square;
 		function resetFirstMove(square: Square) {
 			setMoveFrom(square);
@@ -353,62 +391,214 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 	// 	}
 	// };
 
+	const opponentColor = color === 'w' ? 'b' : 'w';
+	const playerRowStyle = { width: '100%', maxWidth: boardWidth, margin: '6px auto' };
+	const panelStyle = { width: '100%', maxWidth: boardWidth, margin: '0 auto 10px' };
+	const hasDrawOfferFromOpponent = drawOfferBy && color && drawOfferBy !== color;
+	const hasMyDrawOffer = drawOfferBy && color && drawOfferBy === color;
+	const intl = useIntl();
+	const historyMoves = useMemo(() => {
+		if (moveList && moveList.length) {
+			return moveList
+				.map((m) => {
+					if (m?.san) return m.san as string;
+					if (m?.from && m?.to) return `${m.from}${m.to}`;
+					return '';
+				})
+				.filter(Boolean);
+		}
+		return game.history();
+	}, [game, lastMove, moveList]);
+	const showHistoryNav = gameStatus === 'finished' && historyMoves.length > 0;
+	const activePly = viewPly ?? historyMoves.length;
+	const currentFen = displayFen ?? game.fen();
+	const allowUserMove = gameStatus !== 'finished' && (mode === 'single' || (role === 'participant' && color === turn));
+
+	const goToPly = useCallback(
+		(target: number) => {
+			const clamped = Math.max(0, Math.min(target, historyMoves.length));
+			const viewer = new Chess();
+			for (let i = 0; i < clamped; i += 1) {
+				try {
+					viewer.move(historyMoves[i]);
+				} catch (e) {
+					break;
+				}
+			}
+			setDisplayFen(viewer.fen());
+			setViewPly(clamped);
+			setOptionSquares({});
+		},
+		[historyMoves]
+	);
+
+	useEffect(() => {
+		if (gameStatus === 'finished') {
+			setViewPly(historyMoves.length);
+			goToPly(historyMoves.length);
+			setOptionSquares({});
+		} else {
+			setViewPly(null);
+			setDisplayFen(null);
+		}
+	}, [gameStatus, lastMove, historyMoves.length, goToPly]);
+
+	const renderResult = () => {
+		if (gameStatus !== 'finished') return null;
+		let title: React.ReactNode = <FormattedMessage id='result.draw' />;
+		if (winner) {
+			title = <FormattedMessage id={winner === 'w' ? 'result.white_wins' : 'result.black_wins'} />;
+		}
+		return (
+			<div className='result-banner'>
+				<strong>{title}</strong>
+				{resultReason && (
+					<span className='result-reason'>
+						<FormattedMessage id={`result.reason.${resultReason}`} defaultMessage={resultReason} />
+					</span>
+				)}
+			</div>
+		);
+	};
+
 	return (
 		<div style={{ paddingTop: 20, paddingBottom: 50 }}>
-			<p>
-				<FormattedMessage id='turn' />:{' '}
-				<Badge bg={turn === 'b' ? 'dark' : 'light'} text={turn === 'b' ? 'light' : 'dark'}>
-					<FormattedMessage id={'turn.' + turn} />
-				</Badge>
-			</p>
-			<p>
-				<FormattedMessage id='selected_card' />:{' '}
-				{card ? (
-					<Badge bg='success' style={{ fontSize: 20 }}>
-						<FormattedMessage id={'selected.' + card} />
-					</Badge>
-				) : card === 0 ? (
-					<FormattedMessage id='game_over' />
-				) : (
-					<FormattedMessage id='waiting' />
+			<div className='board-wrapper'>
+				<div className='board-panel' style={panelStyle}>
+					{gameStatus === 'finished' ? (
+						renderResult()
+					) : (
+						<p>
+							<FormattedMessage id='turn' />:{' '}
+							<Badge bg={turn === 'b' ? 'dark' : 'light'} text={turn === 'b' ? 'light' : 'dark'}>
+								<FormattedMessage id={'turn.' + turn} />
+							</Badge>
+						</p>
+					)}
+					{gameStatus !== 'finished' && (
+						<p>
+							<FormattedMessage id='selected_card' />:{' '}
+							{card ? (
+								<Badge bg='success' style={{ fontSize: 20 }}>
+									<FormattedMessage id={'selected.' + card} />
+								</Badge>
+							) : card === 0 ? (
+								<FormattedMessage id='game_over' />
+							) : (
+								<FormattedMessage id='waiting' />
+							)}
+						</p>
+					)}
+				</div>
+				{players && color && (
+					<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
+						<PlayerInfo uid={players[opponentColor]} timer={timers?.[opponentColor]} isActive={turn === opponentColor} />
+					</div>
 				)}
-			</p>
-			{players && color && <PlayerInfo uid={players[color === 'w' ? 'b' : 'w']} />}
-			<div ref={boardContainerRef} className='board-container'>
-				<Chessboard
-					options={{
-						allowDragging: mode === 'single' || (role === 'participant' && color === turn),
-						id: 'random-chess-board',
-						position: game.fen(),
-						onPieceDrop: mode === 'single' || (role === 'participant' && color === turn) ? onDrop : undefined,
-						onSquareClick: mode === 'single' || (role === 'participant' && color === turn) ? handleSquareSelect : undefined,
-						onPieceClick: mode === 'single' || (role === 'participant' && color === turn) ? handleSquareSelect : undefined,
-						boardOrientation: color === 'b' ? 'black' : 'white',
-						squareStyles: optionSquares,
-						boardStyle: { width: boardWidth },
-					}}
-				/>
+				<div ref={boardContainerRef} className='board-container'>
+					<Chessboard
+						options={{
+							allowDragging: allowUserMove,
+							id: 'random-chess-board',
+							position: currentFen,
+							onPieceDrop: allowUserMove ? onDrop : undefined,
+							onSquareClick: allowUserMove ? handleSquareSelect : undefined,
+							onPieceClick: allowUserMove ? handleSquareSelect : undefined,
+							boardOrientation: color === 'b' ? 'black' : 'white',
+							squareStyles: optionSquares,
+							boardStyle: { width: boardWidth },
+						}}
+					/>
+				</div>
+				{players && color && (
+					<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
+						<PlayerInfo uid={players[color]} timer={timers?.[color]} isActive={turn === color} />
+					</div>
+				)}
+				{showHistoryNav && (
+					<div className='board-panel history-panel' style={panelStyle}>
+						<div className='history-controls'>
+							<button
+								className='btn btn-outline-light btn-sm'
+								onClick={() => goToPly((viewPly ?? historyMoves.length) - 1)}
+								disabled={activePly <= 0}
+							>
+								◀
+							</button>
+							<button
+								className='btn btn-outline-light btn-sm'
+								onClick={() => goToPly((viewPly ?? historyMoves.length) + 1)}
+								disabled={activePly >= historyMoves.length}
+							>
+								▶
+							</button>
+						</div>
+						<div className='pgn-container' style={panelStyle}>
+							<Moves moves={historyMoves} activePly={activePly} onSelectPly={goToPly} />
+						</div>
+					</div>
+				)}
+			{mode === 'multi' && role === 'participant' && color && gameStatus === 'playing' && (
+					<div className='board-panel action-row' style={panelStyle}>
+						<div className='d-flex gap-2 flex-wrap'>
+							<button
+								className='btn btn-outline-danger'
+								onClick={() => {
+									if (typeof window === 'undefined') return;
+									setShowResignConfirm(true);
+								}}
+							>
+								<FormattedMessage id='buttons.resign' />
+							</button>
+							<button className='btn btn-outline-secondary' onClick={onOfferDraw} disabled={!!drawOfferBy}>
+								<FormattedMessage id='buttons.offer_draw' />
+							</button>
+						</div>
+						{hasMyDrawOffer && (
+							<div className='text-muted small mt-2'>
+								<FormattedMessage id='draw.offered' />
+							</div>
+						)}
+						{hasDrawOfferFromOpponent && (
+							<div className='mt-2 d-flex align-items-center gap-2 flex-wrap'>
+								<span>
+									<FormattedMessage id='draw.offer_from_opponent' />
+								</span>
+								<button className='btn btn-success btn-sm' onClick={onAcceptDraw}>
+									<FormattedMessage id='draw.accept' />
+								</button>
+								<button className='btn btn-outline-secondary btn-sm' onClick={onDeclineDraw}>
+									<FormattedMessage id='draw.decline' />
+								</button>
+							</div>
+						)}
+					</div>
+				)}
+				<div className='board-panel' style={{ ...panelStyle, marginTop: 10 }}>
+					<div style={{ paddingTop: 10 }}>
+						{mode === 'single' && (
+							<button onClick={back} className='btn btn-primary' style={{ marginBottom: 15 }}>
+								<FormattedMessage id='undo' />
+							</button>
+						)}{' '}
+						{mode === 'single' && (
+							<button onClick={reset} className='btn btn-primary' style={{ marginBottom: 15 }}>
+								<FormattedMessage id='new_game' />
+							</button>
+						)}{' '}
+						<LangLink to='/' className='btn btn-primary' style={{ marginBottom: 15, marginRight: 10 }}>
+							<FormattedMessage id='to_main' />
+						</LangLink>
+						{shareControl}
+					</div>
+				</div>
 			</div>
-			{players && color && <PlayerInfo uid={players[color]} />}
 
-			<div style={{ paddingTop: 20 }}>
-				{mode === 'single' && (
-					<button onClick={back} className='btn btn-primary' style={{ marginBottom: 15 }}>
-						<FormattedMessage id='undo' />
-					</button>
-				)}{' '}
-				{mode === 'single' && (
-					<button onClick={reset} className='btn btn-primary' style={{ marginBottom: 15 }}>
-						<FormattedMessage id='new_game' />
-					</button>
-				)}{' '}
-				<LangLink to='/' className='btn btn-primary' style={{ marginBottom: 15, marginRight: 10 }}>
-					<FormattedMessage id='to_main' />
-				</LangLink>
-				{shareControl}
-			</div>
-
-			<div className='pgn-container'><Moves game={game} /></div>
+			{!showHistoryNav && (
+				<div className='pgn-container' style={panelStyle}>
+					<Moves moves={historyMoves} activePly={historyMoves.length} />
+				</div>
+			)}
 			{/* <p>
 				<FormattedMessage id={result} />
 			</p> */}
@@ -421,6 +611,32 @@ function Board({ fen, pgn, role, color, sendMove, mode, lastMove, sendFirstCard,
 					// console.log('onRemove');
 				}}
 			/>
+			{showResignConfirm && (
+				<div className='modal-overlay'>
+					<div className='modal-card'>
+						<h5 className='mb-3'>
+							<FormattedMessage id='buttons.resign' />
+						</h5>
+						<p className='mb-4'>
+							<FormattedMessage id='confirm.resign' />
+						</p>
+						<div className='d-flex gap-2 justify-content-end'>
+							<button className='btn btn-outline-secondary' onClick={() => setShowResignConfirm(false)}>
+								<FormattedMessage id='draw.decline' defaultMessage='Cancel' />
+							</button>
+							<button
+								className='btn btn-danger'
+								onClick={() => {
+									setShowResignConfirm(false);
+									onResign && onResign();
+								}}
+							>
+								<FormattedMessage id='buttons.resign' />
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }
