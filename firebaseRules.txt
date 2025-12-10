@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+    function isParticipant(data) {
+      return isAuthed() && (request.auth.uid == data.white || request.auth.uid == data.black);
+    }
+    function playersUnchanged() {
+      return
+        (!('white' in resource.data) || request.resource.data.white == resource.data.white || resource.data.white == null) &&
+        (!('black' in resource.data) || request.resource.data.black == resource.data.black || resource.data.black == null);
+    }
+
+    match /games/{gameId} {
+      allow read: if isParticipant(resource.data);
+      allow create: if isParticipant(request.resource.data)
+        && request.resource.data.keys().hasOnly(['white','black']);
+      allow update: if isParticipant(resource.data) && isParticipant(request.resource.data)
+        && request.resource.data.keys().hasOnly(['white','black'])
+        && playersUnchanged();
+      allow delete: if false;
+    }
+
+    match /gameData/{gameId} {
+      allow read: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data);
+      allow create, update: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data)
+        && request.resource.data.gameId == gameId
+        && request.resource.data.keys().hasOnly([
+          'status','whiteArrived','blackArrived','firstCard','gameId',
+          'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt',
+          'winner','resultReason','drawOffer'
+        ])
+        && (!('drawOffer' in request.resource.data) || request.resource.data.drawOffer.keys().hasOnly(['by']))
+        && (!('winner' in request.resource.data) || request.resource.data.winner in ['w','b',null])
+        && (!('resultReason' in request.resource.data) || request.resource.data.resultReason in ['timeout','resign','agreement','stalemate','checkmate','other']);
+      allow delete: if false;
+    }
+
+    match /gameMoves/{gameId} {
+      allow read: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data);
+      allow create, update: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data)
+        && request.resource.data.gameId == gameId
+        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId'])
+        && (!('moves' in request.resource.data) || request.resource.data.moves is list);
+      allow delete: if false;
+    }
+
+    match /players/{playerId} {
+      allow read: if true; // needed to show opponent names
+      allow create, update: if isAuthed() && request.auth.uid == playerId
+        && request.resource.data.keys().hasOnly(['displayName','email','photoURL','createdAt','updatedAt'])
+        && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100));
+      allow delete: if isAuthed() && request.auth.uid == playerId;
+    }
+
+    match /chats/{chatId} {
+      // Chat doc shape: { gameId, messages, unread, createdAt }
+      allow read: if resource != null && isParticipant(get(/databases/$(database)/documents/games/$(resource.data.gameId)).data);
+      allow create, update: if request.resource.data.gameId == chatId // enforce chat doc id ties to game
+        && isParticipant(get(/databases/$(database)/documents/games/$(request.resource.data.gameId)).data)
+        && request.resource.data.keys().hasOnly(['gameId','messages','unread','createdAt'])
+        && (!('messages' in request.resource.data) || request.resource.data.messages is list)
+        && (!('unread' in request.resource.data) || request.resource.data.unread is map);
+      allow delete: if false;
+    }
+  }
+}

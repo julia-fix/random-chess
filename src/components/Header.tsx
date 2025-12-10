@@ -37,6 +37,14 @@ export default function Header() {
 							<Nav.Link as={LangLink} to='/single' onClick={() => setIsOpen(false)}>
 								<FormattedMessage id='single_player' />
 							</Nav.Link>
+							<Nav.Link as={LangLink} to='/computer' onClick={() => setIsOpen(false)}>
+								<FormattedMessage id='play_computer' defaultMessage='Play computer' />
+							</Nav.Link>
+							{user.loggedIn && (
+								<Nav.Link as={LangLink} to='/history' onClick={() => setIsOpen(false)}>
+									<FormattedMessage id='history' defaultMessage='History' />
+								</Nav.Link>
+							)}
 							{user.loading ? null : user.loggedIn ? (
 								<NavDropdown
 									align='end'

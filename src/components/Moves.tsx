@@ -1,9 +1,18 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 
+interface MoveEntry {
+	san?: string;
+	from?: string;
+	to?: string;
+	promotion?: string;
+	card?: string | number;
+	[index: string]: any;
+}
+
 interface PGNMovesProps {
 	game?: Chess;
-	moves?: string[];
+	moves?: Array<string | MoveEntry>;
 	activePly?: number;
 	onSelectPly?: (ply: number) => void;
 }
@@ -14,7 +23,7 @@ const Moves: React.FC<PGNMovesProps> = ({ game, moves, activePly, onSelectPly })
 	const activeRef = useRef<HTMLSpanElement>(null);
 
 	const entries = useMemo(() => {
-		const list: { number: number; white?: string; black?: string; whiteIndex: number; blackIndex?: number }[] = [];
+		const list: { number: number; white?: MoveEntry | string; black?: MoveEntry | string; whiteIndex: number; blackIndex?: number }[] = [];
 		for (let i = 0; i < history.length; i += 2) {
 			const moveNumber = Math.floor(i / 2) + 1;
 			list.push({
@@ -30,20 +39,26 @@ const Moves: React.FC<PGNMovesProps> = ({ game, moves, activePly, onSelectPly })
 
 	const activeIndex = (activePly ?? history.length) - 1;
 
+	const moveCard = (m?: MoveEntry | string) => {
+		if (!m || typeof m === 'string') return undefined;
+		return m.card;
+	};
+
+	const renderMoveText = (m?: MoveEntry | string) => {
+		if (!m) return '';
+		if (typeof m === 'string') return m;
+		return m.san || `${m.from ?? ''}${m.to ?? ''}`;
+	};
+
+	// Scroll only when externally asked (e.g., navigation buttons)
 	useEffect(() => {
-		if (activeRef.current && containerRef.current) {
-			const parent = containerRef.current;
-			const el = activeRef.current;
-			const elLeft = el.offsetLeft;
-			const elRight = elLeft + el.offsetWidth;
-			const viewLeft = parent.scrollLeft;
-			const viewRight = viewLeft + parent.clientWidth;
-			if (elLeft < viewLeft) {
-				parent.scrollTo({ left: elLeft - 10, behavior: 'smooth' });
-			} else if (elRight > viewRight) {
-				parent.scrollTo({ left: elRight - parent.clientWidth + 10, behavior: 'smooth' });
-			}
-		}
+		if (!activeRef.current || !containerRef.current) return;
+		if (containerRef.current.dataset.scrollOnActive !== 'true') return;
+		activeRef.current.scrollIntoView({
+			behavior: 'smooth',
+			block: 'nearest',
+			inline: 'nearest',
+		});
 	}, [activeIndex]);
 
 	return (
@@ -55,7 +70,10 @@ const Moves: React.FC<PGNMovesProps> = ({ game, moves, activePly, onSelectPly })
 						onClick={() => onSelectPly && onSelectPly(m.whiteIndex + 1)}
 						ref={activeIndex === m.whiteIndex ? activeRef : undefined}
 					>
-						{m.number}. {m.white}
+						{m.number}. {moveCard(m.white) !== undefined && (
+							<span className='move-card'>{moveCard(m.white)}</span>
+						)}
+						{renderMoveText(m.white)}
 					</span>
 					{m.black && (
 						<span
@@ -63,7 +81,8 @@ const Moves: React.FC<PGNMovesProps> = ({ game, moves, activePly, onSelectPly })
 							onClick={() => onSelectPly && onSelectPly((m.blackIndex ?? 0) + 1)}
 							ref={activeIndex === m.blackIndex ? activeRef : undefined}
 						>
-							{m.black}
+							{moveCard(m.black) !== undefined && <span className='move-card'>{moveCard(m.black)}</span>}
+							{renderMoveText(m.black)}
 						</span>
 					)}
 				</span>

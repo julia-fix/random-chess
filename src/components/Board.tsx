@@ -41,16 +41,20 @@ type Props = {
 	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other';
 	drawOfferBy?: 'w' | 'b';
 	onResign?: () => void;
-	onOfferDraw?: () => void;
 	onAcceptDraw?: () => void;
 	onDeclineDraw?: () => void;
 	moveList?: any[];
+	drawNextCardExternal?: (game: Chess, gameCopy: Chess) => string | number;
+	onNewGame?: () => void;
+	topControls?: React.ReactNode;
+	onShowRules?: () => void;
 	sendMove?: (move: any, fen: string, pgn: string) => void;
 	sendFirstCard?: (card: any) => void;
 	mode: 'single' | 'multi';
 	lastMove?: any;
 	firstCard?: string | number;
 	players?: { w: string | null; b: string | null };
+	playerLabels?: { w: string; b: string };
 	shareControl?: React.ReactNode;
 };
 
@@ -72,10 +76,14 @@ function Board({
 	resultReason,
 	drawOfferBy,
 	onResign,
-	onOfferDraw,
 	onAcceptDraw,
 	onDeclineDraw,
 	moveList,
+	drawNextCardExternal,
+	onNewGame,
+	topControls,
+	onShowRules,
+	playerLabels,
 }: Props) {
 	// const [game] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
 	// const [gameCopy] = useState<ChessInstance>(new Chess('8/1P1P1P1P/8/1K6/6k1/8/p1p1p1p1/8 w KQkq - 0 1'));
@@ -98,6 +106,7 @@ function Board({
 	const [showResignConfirm, setShowResignConfirm] = useState(false);
 	const [displayFen, setDisplayFen] = useState<string | null>(null);
 	const [viewPly, setViewPly] = useState<number | null>(null);
+	const drawCardFn = useCallback(() => (drawNextCardExternal ? drawNextCardExternal(game, gameCopy) : drawCard()), [drawCard, drawNextCardExternal, game, gameCopy]);
 
 	const getAllowedMoves = useCallback(
 		(square: Square) => {
@@ -160,13 +169,13 @@ function Board({
 			}
 
 			if (mode === 'single' && !cardInitRef.current) {
-				drawCard();
+				drawCardFn();
 				cardInitRef.current = true;
 			} else if (mode === 'multi') {
 				if (lastMove) {
 					setCard(lastMove.nextCard);
 				} else if (color === 'w' && !firstCard) {
-					const newCard = drawCard();
+					const newCard = drawCardFn();
 					sendFirstCard && sendFirstCard(newCard);
 				}
 			}
@@ -183,6 +192,9 @@ function Board({
 	useEffect(() => {
 		// console.log('lastMove changed', lastMove, knownLastMove);
 		if (lastMove) {
+			if (moveList && moveList.length) {
+				return;
+			}
 			if (lastMove.moveIndex && lastMove.moveIndex <= game.history().length) {
 				return;
 			}
@@ -191,7 +203,7 @@ function Board({
 				opponentMove(lastMove);
 			}
 		}
-	}, [lastMove, knownLastMove, opponentMove]);
+	}, [lastMove, knownLastMove, opponentMove, moveList]);
 
 	const isGameOver = () => {
 		const possibleMoves = game.moves({ verbose: true });
@@ -216,7 +228,7 @@ function Board({
 			// console.log('gameCopy moved');
 			let nextCard;
 			if (!game.isGameOver()) {
-				nextCard = drawCard();
+				nextCard = drawCardFn();
 			} else {
 				nextCard = 0;
 			}
@@ -391,7 +403,8 @@ function Board({
 	// 	}
 	// };
 
-	const opponentColor = color === 'w' ? 'b' : 'w';
+	const playerColor = color || (mode === 'single' ? 'w' : 'w');
+	const opponentColor = playerColor === 'w' ? 'b' : 'w';
 	const playerRowStyle = { width: '100%', maxWidth: boardWidth, margin: '6px auto' };
 	const panelStyle = { width: '100%', maxWidth: boardWidth, margin: '0 auto 10px' };
 	const hasDrawOfferFromOpponent = drawOfferBy && color && drawOfferBy !== color;
@@ -399,20 +412,14 @@ function Board({
 	const intl = useIntl();
 	const historyMoves = useMemo(() => {
 		if (moveList && moveList.length) {
-			return moveList
-				.map((m) => {
-					if (m?.san) return m.san as string;
-					if (m?.from && m?.to) return `${m.from}${m.to}`;
-					return '';
-				})
-				.filter(Boolean);
+			return moveList;
 		}
 		return game.history();
 	}, [game, lastMove, moveList]);
 	const showHistoryNav = gameStatus === 'finished' && historyMoves.length > 0;
 	const activePly = viewPly ?? historyMoves.length;
 	const currentFen = displayFen ?? game.fen();
-	const allowUserMove = gameStatus !== 'finished' && (mode === 'single' || (role === 'participant' && color === turn));
+	const allowUserMove = gameStatus !== 'finished' && (mode === 'single' || (role === 'participant' && playerColor === turn));
 
 	const goToPly = useCallback(
 		(target: number) => {
@@ -463,20 +470,25 @@ function Board({
 
 	return (
 		<div style={{ paddingTop: 20, paddingBottom: 50 }}>
+			{(onNewGame || topControls) && (
+				<div className='board-wrapper'>
+					<div className='board-panel' style={{ ...panelStyle, marginBottom: 0 }}>
+						<div className='d-flex gap-2 align-items-center flex-wrap'>
+							{onNewGame && (
+								<button onClick={onNewGame} className='btn btn-outline-light' style={{ marginBottom: 10 }}>
+									<FormattedMessage id='new_game' />
+								</button>
+							)}
+							{topControls}
+						</div>
+					</div>
+				</div>
+			)}
 			<div className='board-wrapper'>
 				<div className='board-panel' style={panelStyle}>
-					{gameStatus === 'finished' ? (
-						renderResult()
-					) : (
-						<p>
-							<FormattedMessage id='turn' />:{' '}
-							<Badge bg={turn === 'b' ? 'dark' : 'light'} text={turn === 'b' ? 'light' : 'dark'}>
-								<FormattedMessage id={'turn.' + turn} />
-							</Badge>
-						</p>
-					)}
+					{gameStatus === 'finished' ? renderResult() : null}
 					{gameStatus !== 'finished' && (
-						<p>
+						<p className='d-flex align-items-center gap-2'>
 							<FormattedMessage id='selected_card' />:{' '}
 							{card ? (
 								<Badge bg='success' style={{ fontSize: 20 }}>
@@ -487,14 +499,32 @@ function Board({
 							) : (
 								<FormattedMessage id='waiting' />
 							)}
+							{onShowRules && (
+								<button
+									type='button'
+									className='btn btn-outline-light btn-sm rounded-circle'
+									style={{ width: 28, height: 28, padding: 0 }}
+									onClick={onShowRules}
+									aria-label={intl.formatMessage({ id: 'game_rules' })}
+								>
+									?
+								</button>
+							)}
 						</p>
 					)}
 				</div>
-				{players && color && (
-					<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
-						<PlayerInfo uid={players[opponentColor]} timer={timers?.[opponentColor]} isActive={turn === opponentColor} />
-					</div>
-				)}
+				<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
+					<PlayerInfo
+						uid={players ? players[opponentColor] : null}
+						fallbackName={
+							players
+								? undefined
+								: playerLabels?.[opponentColor] || (mode === 'single' ? 'Black' : mode === 'multi' ? undefined : 'Computer')
+						}
+						timer={timers?.[opponentColor]}
+						isActive={turn === opponentColor}
+					/>
+				</div>
 				<div ref={boardContainerRef} className='board-container'>
 					<Chessboard
 						options={{
@@ -504,17 +534,22 @@ function Board({
 							onPieceDrop: allowUserMove ? onDrop : undefined,
 							onSquareClick: allowUserMove ? handleSquareSelect : undefined,
 							onPieceClick: allowUserMove ? handleSquareSelect : undefined,
-							boardOrientation: color === 'b' ? 'black' : 'white',
+							boardOrientation: playerColor === 'b' ? 'black' : 'white',
 							squareStyles: optionSquares,
 							boardStyle: { width: boardWidth },
 						}}
 					/>
 				</div>
-				{players && color && (
-					<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
-						<PlayerInfo uid={players[color]} timer={timers?.[color]} isActive={turn === color} />
-					</div>
-				)}
+				<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
+					<PlayerInfo
+						uid={players ? players[playerColor] : null}
+						fallbackName={
+							players ? undefined : playerLabels?.[playerColor] || (mode === 'single' ? 'White' : mode === 'multi' ? undefined : 'Player')
+						}
+						timer={timers?.[playerColor]}
+						isActive={turn === playerColor}
+					/>
+				</div>
 				{showHistoryNav && (
 					<div className='board-panel history-panel' style={panelStyle}>
 						<div className='history-controls'>
@@ -533,12 +568,12 @@ function Board({
 								▶
 							</button>
 						</div>
-						<div className='pgn-container' style={panelStyle}>
+						<div className='pgn-container' data-scroll-on-active='true' style={panelStyle}>
 							<Moves moves={historyMoves} activePly={activePly} onSelectPly={goToPly} />
 						</div>
 					</div>
 				)}
-			{mode === 'multi' && role === 'participant' && color && gameStatus === 'playing' && (
+				{mode === 'multi' && role === 'participant' && color && gameStatus === 'playing' && (
 					<div className='board-panel action-row' style={panelStyle}>
 						<div className='d-flex gap-2 flex-wrap'>
 							<button
@@ -550,26 +585,10 @@ function Board({
 							>
 								<FormattedMessage id='buttons.resign' />
 							</button>
-							<button className='btn btn-outline-secondary' onClick={onOfferDraw} disabled={!!drawOfferBy}>
-								<FormattedMessage id='buttons.offer_draw' />
-							</button>
 						</div>
 						{hasMyDrawOffer && (
 							<div className='text-muted small mt-2'>
 								<FormattedMessage id='draw.offered' />
-							</div>
-						)}
-						{hasDrawOfferFromOpponent && (
-							<div className='mt-2 d-flex align-items-center gap-2 flex-wrap'>
-								<span>
-									<FormattedMessage id='draw.offer_from_opponent' />
-								</span>
-								<button className='btn btn-success btn-sm' onClick={onAcceptDraw}>
-									<FormattedMessage id='draw.accept' />
-								</button>
-								<button className='btn btn-outline-secondary btn-sm' onClick={onDeclineDraw}>
-									<FormattedMessage id='draw.decline' />
-								</button>
 							</div>
 						)}
 					</div>

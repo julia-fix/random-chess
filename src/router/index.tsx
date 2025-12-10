@@ -5,6 +5,9 @@ import SingleGame from '../pages/SingleGame';
 import NotFound from '../pages/NotFound';
 import OnlineGame from '../pages/OnlineGame';
 import GameChoice from '../pages/GameChoice';
+import ComputerGame from '../pages/ComputerGame';
+import HistoryList from '../pages/HistoryList';
+import HistoryGame from '../pages/HistoryGame';
 import { Toaster } from 'react-hot-toast';
 import { useIntl } from 'react-intl';
 import Auth from '../pages/Auth';
@@ -17,6 +20,7 @@ const LangRoutes = () => (
 		<Routes>
 			<Route index element={<GameChoice />} />
 			<Route path='single' element={<SingleGame />} />
+			<Route path='computer' element={<ComputerGame />} />
 			<Route path='auth' element={<Auth />} />
 			<Route element={<RequireAuth />}>
 				<Route path='play/*'>
@@ -24,6 +28,8 @@ const LangRoutes = () => (
 					<Route path=':gameId' element={<OnlineGame />} />
 					<Route path='*' element={<NotFound />} />
 				</Route>
+				<Route path='history' element={<HistoryList />} />
+				<Route path='history/:gameId' element={<HistoryGame />} />
 			</Route>
 			<Route path='*' element={<NotFound />} />
 		</Routes>

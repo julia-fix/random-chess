@@ -1,9 +1,20 @@
 import Board from '../components/Board';
+import { useState } from 'react';
+import GameRulesModal from '../components/GameRulesModal';
+import { useIntl } from 'react-intl';
 
 function SingleGame() {
+	const [showRules, setShowRules] = useState(false);
+	const intl = useIntl();
+
 	return (
 		<div style={{ paddingTop: 20 }}>
-			<Board mode='single' />
+			<Board
+				mode='single'
+				onShowRules={() => setShowRules(true)}
+				playerLabels={{ w: intl.formatMessage({ id: 'player.white', defaultMessage: 'White' }), b: intl.formatMessage({ id: 'player.black', defaultMessage: 'Black' }) }}
+			/>
+			<GameRulesModal show={showRules} onHide={() => setShowRules(false)} />
 		</div>
 	);
 }

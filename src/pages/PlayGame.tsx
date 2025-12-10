@@ -20,6 +20,7 @@ import {
 } from '../services/gameService';
 import { GameDataDoc, GameDoc } from '../types/game';
 import PageLoading from '../components/PageLoading';
+import GameRulesModal from '../components/GameRulesModal';
 
 export default function PlayGame() {
 	const user = useContext(UserContext);
@@ -34,6 +35,7 @@ export default function PlayGame() {
 	const [players, setPlayers] = useState<{ w: string | null; b: string | null }>({ w: null, b: null });
 	const [whiteTimeLeftMs, setWhiteTimeLeftMs] = useState<number>();
 	const [blackTimeLeftMs, setBlackTimeLeftMs] = useState<number>();
+	const [showRules, setShowRules] = useState(false);
 
 	const intl = useIntl();
 
@@ -289,6 +291,7 @@ export default function PlayGame() {
 					onOfferDraw={handleOfferDraw}
 					onAcceptDraw={handleAcceptDraw}
 					onDeclineDraw={handleDeclineDraw}
+					onShowRules={() => setShowRules(true)}
 					sendFirstCard={sendFirstCard}
 					firstCard={firstCard}
 					players={players}
@@ -305,6 +308,7 @@ export default function PlayGame() {
 			)}
 
 			<GameChat gameId={gameId} />
+			<GameRulesModal show={showRules} onHide={() => setShowRules(false)} />
 		</div>
 	);
 }
