@@ -45,7 +45,7 @@ export default function ShareGame({ url, title = 'Random Chess game', compact = 
 		<div className={containerClass}>
 			{supportsShare ? (
 				<>
-					<button className={`btn ${compact ? 'btn-outline-secondary btn-sm' : 'btn-secondary'}`} onClick={handleShare} aria-label='Share game'>
+					<button className={`btn ${compact ? 'btn-outline-light btn-sm' : 'btn-secondary'}`} onClick={handleShare} aria-label='Share game'>
 						{compact ? <GiShare /> : 'Share game'}
 					</button>
 					{status && <span>{status}</span>}
@@ -61,7 +61,7 @@ export default function ShareGame({ url, title = 'Random Chess game', compact = 
 					{status && <span>{status}</span>}
 				</>
 			)}
-			<button className={`btn ${compact ? 'btn-outline-secondary btn-sm' : 'btn-outline-secondary'}`} onClick={copyLink}>
+			<button className={`btn ${compact ? 'btn-outline-light btn-sm' : 'btn-outline-light'}`} onClick={copyLink}>
 				<FormattedMessage id='copy_link' />
 			</button>
 		</div>

@@ -6,63 +6,90 @@ service cloud.firestore {
       return request.auth != null;
     }
     function isParticipant(data) {
-      return isAuthed() && (request.auth.uid == data.white || request.auth.uid == data.black);
+      return isAuthed() && data != null && (
+        request.auth.uid == data.white ||
+        request.auth.uid == data.black ||
+        (data.participants != null && data.participants.hasAny([request.auth.uid]))
+      );
+    }
+    function gameHasOpenSeat(data) {
+      return data != null && (data.white == null || data.black == null);
     }
     function playersUnchanged() {
       return
         (!('white' in resource.data) || request.resource.data.white == resource.data.white || resource.data.white == null) &&
         (!('black' in resource.data) || request.resource.data.black == resource.data.black || resource.data.black == null);
     }
+    function seatChangeAllowed() {
+      return
+        (!('white' in request.resource.data) || request.resource.data.white == resource.data.white || (resource.data.white == null && request.resource.data.white == request.auth.uid)) &&
+        (!('black' in request.resource.data) || request.resource.data.black == resource.data.black || (resource.data.black == null && request.resource.data.black == request.auth.uid));
+    }
 
     match /games/{gameId} {
-      allow read: if isParticipant(resource.data);
-      allow create: if isParticipant(request.resource.data)
-        && request.resource.data.keys().hasOnly(['white','black']);
-      allow update: if isParticipant(resource.data) && isParticipant(request.resource.data)
-        && request.resource.data.keys().hasOnly(['white','black'])
-        && playersUnchanged();
+      allow read: if isAuthed();
+      allow create: if isAuthed()
+        && request.resource.data.keys().hasOnly(['white','black','participants','whiteName','blackName','createdAt'])
+        && (!('participants' in request.resource.data) || request.resource.data.participants is list || request.resource.data.participants is map);
+      allow update: if request.auth != null
+        && (isParticipant(resource.data) || gameHasOpenSeat(resource.data) || isParticipant(request.resource.data))
+        && request.resource.data.keys().hasOnly(['white','black','participants','whiteName','blackName','createdAt'])
+        && (!('participants' in request.resource.data) || request.resource.data.participants is list || request.resource.data.participants is map)
+        && seatChangeAllowed();
       allow delete: if false;
     }
 
     match /gameData/{gameId} {
-      allow read: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data);
-      allow create, update: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data)
-        && request.resource.data.gameId == gameId
+      allow read: if isAuthed();
+      allow create: if isAuthed() && request.resource.data.gameId == gameId
         && request.resource.data.keys().hasOnly([
-          'status','whiteArrived','blackArrived','firstCard','gameId',
+          'status','whiteArrived','blackArrived','firstCard','gameId','createdAt',
           'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt',
           'winner','resultReason','drawOffer'
         ])
-        && (!('drawOffer' in request.resource.data) || request.resource.data.drawOffer.keys().hasOnly(['by']))
+        && (!('drawOffer' in request.resource.data) || true)
+        && (!('winner' in request.resource.data) || request.resource.data.winner in ['w','b',null])
+        && (!('resultReason' in request.resource.data) || request.resource.data.resultReason in ['timeout','resign','agreement','stalemate','checkmate','other']);
+      allow update: if (isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data) || isParticipant(request.resource.data) || gameHasOpenSeat(get(/databases/$(database)/documents/games/$(gameId)).data))
+        && request.resource.data.keys().hasOnly([
+          'status','whiteArrived','blackArrived','firstCard','gameId','createdAt',
+          'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt',
+          'winner','resultReason','drawOffer'
+        ])
+        && (!('gameId' in request.resource.data) || request.resource.data.gameId == gameId)
+        && (!('drawOffer' in request.resource.data) || true)
         && (!('winner' in request.resource.data) || request.resource.data.winner in ['w','b',null])
         && (!('resultReason' in request.resource.data) || request.resource.data.resultReason in ['timeout','resign','agreement','stalemate','checkmate','other']);
       allow delete: if false;
     }
 
     match /gameMoves/{gameId} {
-      allow read: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data);
-      allow create, update: if isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data)
-        && request.resource.data.gameId == gameId
-        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId'])
-        && (!('moves' in request.resource.data) || request.resource.data.moves is list);
+      allow read: if isAuthed();
+      allow create: if isAuthed()
+        && (!('gameId' in request.resource.data) || request.resource.data.gameId == gameId)
+        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId','createdAt'])
+        && (!('moves' in request.resource.data) || request.resource.data.moves is list || request.resource.data.moves is map);
+      allow update: if request.auth != null
+        && (isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data) || gameHasOpenSeat(get(/databases/$(database)/documents/games/$(gameId)).data))
+        && (!('gameId' in request.resource.data) || request.resource.data.gameId == gameId)
+        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId','createdAt'])
+        && (!('moves' in request.resource.data) || request.resource.data.moves is list || request.resource.data.moves is map);
       allow delete: if false;
     }
 
     match /players/{playerId} {
-      allow read: if true; // needed to show opponent names
-      allow create, update: if isAuthed() && request.auth.uid == playerId
-        && request.resource.data.keys().hasOnly(['displayName','email','photoURL','createdAt','updatedAt'])
-        && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100));
+      allow read: if isAuthed(); // needed to show opponent names
+      allow create, update: if isAuthed() && request.auth.uid == playerId;
       allow delete: if isAuthed() && request.auth.uid == playerId;
     }
 
     match /chats/{chatId} {
       // Chat doc shape: { gameId, messages, unread, createdAt }
-      allow read: if resource != null && isParticipant(get(/databases/$(database)/documents/games/$(resource.data.gameId)).data);
+      allow read: if isParticipant(get(/databases/$(database)/documents/games/$(chatId)).data);
       allow create, update: if request.resource.data.gameId == chatId // enforce chat doc id ties to game
         && isParticipant(get(/databases/$(database)/documents/games/$(request.resource.data.gameId)).data)
         && request.resource.data.keys().hasOnly(['gameId','messages','unread','createdAt'])
-        && (!('messages' in request.resource.data) || request.resource.data.messages is list)
+        && (!('messages' in request.resource.data) || request.resource.data.messages is list || request.resource.data.messages is map)
         && (!('unread' in request.resource.data) || request.resource.data.unread is map);
       allow delete: if false;
     }

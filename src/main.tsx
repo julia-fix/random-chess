@@ -6,6 +6,13 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.scss';
 import { BrowserRouter } from 'react-router-dom';
 
+// Surface unhandled promise rejections (useful for Firestore permission errors)
+if (import.meta.env.DEV) {
+	window.addEventListener('unhandledrejection', (event) => {
+		console.error('Unhandled promise rejection:', event.reason);
+	});
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
 	// <React.StrictMode>
@@ -14,5 +21,4 @@ root.render(
 	</BrowserRouter>
 	// </React.StrictMode>
 );
-
 

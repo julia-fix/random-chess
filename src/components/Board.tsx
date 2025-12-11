@@ -41,8 +41,10 @@ type Props = {
 	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other';
 	drawOfferBy?: 'w' | 'b';
 	onResign?: () => void;
+	onOfferDraw?: () => void;
 	onAcceptDraw?: () => void;
 	onDeclineDraw?: () => void;
+	onJoinSeat?: (color: 'w' | 'b') => void;
 	moveList?: any[];
 	drawNextCardExternal?: (game: Chess, gameCopy: Chess) => string | number;
 	onNewGame?: () => void;
@@ -78,6 +80,8 @@ function Board({
 	onResign,
 	onAcceptDraw,
 	onDeclineDraw,
+	onOfferDraw,
+	onJoinSeat,
 	moveList,
 	drawNextCardExternal,
 	onNewGame,
@@ -106,6 +110,7 @@ function Board({
 	const [showResignConfirm, setShowResignConfirm] = useState(false);
 	const [displayFen, setDisplayFen] = useState<string | null>(null);
 	const [viewPly, setViewPly] = useState<number | null>(null);
+	const [isFlipped, setIsFlipped] = useState(false);
 	const drawCardFn = useCallback(() => (drawNextCardExternal ? drawNextCardExternal(game, gameCopy) : drawCard()), [drawCard, drawNextCardExternal, game, gameCopy]);
 
 	const getAllowedMoves = useCallback(
@@ -184,6 +189,16 @@ function Board({
 		}
 	}, [color, fen, pgn, mode, lastMove, firstCard, sendFirstCard, gameCopy, game, drawCard, inited, setCard]);
 
+	// Ensure first card is drawn when white seat is claimed after initial load
+	useEffect(() => {
+		if (mode === 'multi' && color === 'w' && !firstCard && !lastMove && !cardInitRef.current) {
+			const newCard = drawCardFn();
+			setCard(newCard);
+			sendFirstCard && sendFirstCard(newCard);
+			cardInitRef.current = true;
+		}
+	}, [mode, color, firstCard, lastMove, drawCardFn, sendFirstCard, setCard]);
+
 	useEffect(() => {
 		if (firstCard && !card && !lastMove) setCard(firstCard);
 		else if (lastMove && !card) setCard(lastMove.nextCard);
@@ -211,6 +226,44 @@ function Board({
 			return true;
 		}
 		return false;
+	};
+
+	const renderPlayerSlot = (slotColor: 'w' | 'b') => {
+		const playerId = players ? players[slotColor] : null;
+		if (!playerId && role === 'spectator' && onJoinSeat && gameStatus !== 'finished') {
+			return (
+				<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
+					<button className='btn btn-outline-light w-100' onClick={() => onJoinSeat(slotColor)}>
+						<FormattedMessage
+							id='buttons.join_as'
+							defaultMessage='Join as {color}'
+							values={{
+								color:
+									playerLabels?.[slotColor] ||
+									(slotColor === 'w'
+										? intl.formatMessage({ id: 'player.white', defaultMessage: 'White' })
+										: intl.formatMessage({ id: 'player.black', defaultMessage: 'Black' })),
+							}}
+						/>
+					</button>
+				</div>
+			);
+		}
+
+		return (
+			<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
+				<PlayerInfo
+					uid={players ? players[slotColor] : null}
+					fallbackName={
+						players
+							? playerLabels?.[slotColor]
+							: playerLabels?.[slotColor] || (mode === 'single' ? (slotColor === 'w' ? 'White' : 'Black') : mode === 'multi' ? undefined : slotColor === 'w' ? 'Player' : 'Computer')
+					}
+					timer={timers?.[slotColor]}
+					isActive={turn === slotColor}
+				/>
+			</div>
+		);
 	};
 
 	function commitMove(sourceSquare: Square, targetSquare: Square, promotion: PromotionType) {
@@ -409,6 +462,7 @@ function Board({
 	const panelStyle = { width: '100%', maxWidth: boardWidth, margin: '0 auto 10px' };
 	const hasDrawOfferFromOpponent = drawOfferBy && color && drawOfferBy !== color;
 	const hasMyDrawOffer = drawOfferBy && color && drawOfferBy === color;
+	const showFlip = !!(players?.w && players?.b);
 	const intl = useIntl();
 	const historyMoves = useMemo(() => {
 		if (moveList && moveList.length) {
@@ -420,6 +474,8 @@ function Board({
 	const activePly = viewPly ?? historyMoves.length;
 	const currentFen = displayFen ?? game.fen();
 	const allowUserMove = gameStatus !== 'finished' && (mode === 'single' || (role === 'participant' && playerColor === turn));
+	const baseOrientation = playerColor === 'b' ? 'black' : 'white';
+	const boardOrientation = isFlipped ? (baseOrientation === 'white' ? 'black' : 'white') : baseOrientation;
 
 	const goToPly = useCallback(
 		(target: number) => {
@@ -513,18 +569,7 @@ function Board({
 						</p>
 					)}
 				</div>
-				<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
-					<PlayerInfo
-						uid={players ? players[opponentColor] : null}
-						fallbackName={
-							players
-								? undefined
-								: playerLabels?.[opponentColor] || (mode === 'single' ? 'Black' : mode === 'multi' ? undefined : 'Computer')
-						}
-						timer={timers?.[opponentColor]}
-						isActive={turn === opponentColor}
-					/>
-				</div>
+				{renderPlayerSlot(opponentColor)}
 				<div ref={boardContainerRef} className='board-container'>
 					<Chessboard
 						options={{
@@ -534,22 +579,13 @@ function Board({
 							onPieceDrop: allowUserMove ? onDrop : undefined,
 							onSquareClick: allowUserMove ? handleSquareSelect : undefined,
 							onPieceClick: allowUserMove ? handleSquareSelect : undefined,
-							boardOrientation: playerColor === 'b' ? 'black' : 'white',
+							boardOrientation: boardOrientation,
 							squareStyles: optionSquares,
 							boardStyle: { width: boardWidth },
 						}}
 					/>
 				</div>
-				<div className='d-flex justify-content-between align-items-center' style={playerRowStyle}>
-					<PlayerInfo
-						uid={players ? players[playerColor] : null}
-						fallbackName={
-							players ? undefined : playerLabels?.[playerColor] || (mode === 'single' ? 'White' : mode === 'multi' ? undefined : 'Player')
-						}
-						timer={timers?.[playerColor]}
-						isActive={turn === playerColor}
-					/>
-				</div>
+				{renderPlayerSlot(playerColor)}
 				{showHistoryNav && (
 					<div className='board-panel history-panel' style={panelStyle}>
 						<div className='history-controls'>
@@ -573,24 +609,62 @@ function Board({
 						</div>
 					</div>
 				)}
-				{mode === 'multi' && role === 'participant' && color && gameStatus === 'playing' && (
+				{mode === 'multi' && role === 'participant' && color && (
 					<div className='board-panel action-row' style={panelStyle}>
 						<div className='d-flex gap-2 flex-wrap'>
-							<button
-								className='btn btn-outline-danger'
-								onClick={() => {
-									if (typeof window === 'undefined') return;
-									setShowResignConfirm(true);
-								}}
-							>
-								<FormattedMessage id='buttons.resign' />
-							</button>
+							{showFlip && (
+								<button className='btn btn-outline-light' onClick={() => setIsFlipped((f) => !f)}>
+									<FormattedMessage id='buttons.flip_board' defaultMessage='Flip board' />
+								</button>
+							)}
+							{gameStatus === 'playing' && (
+								<>
+									<button
+										className='btn btn-outline-danger'
+										onClick={() => {
+											if (typeof window === 'undefined') return;
+											setShowResignConfirm(true);
+										}}
+									>
+										<FormattedMessage id='buttons.resign' />
+									</button>
+									{onOfferDraw && !hasMyDrawOffer && !hasDrawOfferFromOpponent && (
+										<button className='btn btn-outline-light' onClick={() => onOfferDraw()}>
+											<FormattedMessage id='buttons.offer_draw' defaultMessage='Offer a draw' />
+										</button>
+									)}
+								</>
+							)}
 						</div>
+						{hasDrawOfferFromOpponent && (
+							<div className='d-flex align-items-center gap-2 flex-wrap mt-2'>
+								<span className='small'>
+									<FormattedMessage id='draw.offer_from_opponent' />
+								</span>
+								{onAcceptDraw && (
+									<button className='btn btn-success btn-sm' onClick={onAcceptDraw}>
+										<FormattedMessage id='draw.accept' defaultMessage='Accept' />
+									</button>
+								)}
+								{onDeclineDraw && (
+									<button className='btn btn-outline-light btn-sm' onClick={onDeclineDraw}>
+										<FormattedMessage id='draw.decline' defaultMessage='Decline' />
+									</button>
+								)}
+							</div>
+						)}
 						{hasMyDrawOffer && (
-							<div className='text-muted small mt-2'>
+							<div className='small mt-2'>
 								<FormattedMessage id='draw.offered' />
 							</div>
 						)}
+					</div>
+				)}
+				{mode === 'multi' && role === 'spectator' && showFlip && (
+					<div className='board-panel action-row' style={panelStyle}>
+						<button className='btn btn-outline-light' onClick={() => setIsFlipped((f) => !f)}>
+							<FormattedMessage id='buttons.flip_board' defaultMessage='Flip board' />
+						</button>
 					</div>
 				)}
 				<div className='board-panel' style={{ ...panelStyle, marginTop: 10 }}>
@@ -640,7 +714,7 @@ function Board({
 							<FormattedMessage id='confirm.resign' />
 						</p>
 						<div className='d-flex gap-2 justify-content-end'>
-							<button className='btn btn-outline-secondary' onClick={() => setShowResignConfirm(false)}>
+							<button className='btn btn-outline-light' onClick={() => setShowResignConfirm(false)}>
 								<FormattedMessage id='draw.decline' defaultMessage='Cancel' />
 							</button>
 							<button

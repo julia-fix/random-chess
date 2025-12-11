@@ -5,6 +5,10 @@ export type PlayerId = string | null | undefined;
 export type GameDoc = {
 	white?: PlayerId;
 	black?: PlayerId;
+	participants?: string[];
+	whiteName?: string | null;
+	blackName?: string | null;
+	createdAt?: any;
 };
 
 export type GameDataDoc = {

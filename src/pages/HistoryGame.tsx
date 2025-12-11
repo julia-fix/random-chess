@@ -15,6 +15,14 @@ export default function HistoryGame() {
 	const [resultReason, setResultReason] = useState<any>();
 	const [showRules, setShowRules] = useState(false);
 	const intl = useIntl();
+	const defaultLabels = useMemo(
+		() => ({
+			w: intl.formatMessage({ id: 'player.white', defaultMessage: 'White' }),
+			b: intl.formatMessage({ id: 'player.black', defaultMessage: 'Black' }),
+		}),
+		[intl]
+	);
+	const [labels, setLabels] = useState<{ w: string; b: string }>(defaultLabels);
 
 	useEffect(() => {
 		const load = async () => {
@@ -27,7 +35,11 @@ export default function HistoryGame() {
 			}
 			if (gameSnap.exists()) {
 				const g = gameSnap.data() as any;
-				setPlayers({ w: g.white ?? null, b: g.black ?? null });
+				setPlayers({ w: null, b: null });
+				setLabels({
+					w: g.whiteName || defaultLabels.w,
+					b: g.blackName || defaultLabels.b,
+				});
 			}
 			if (dataSnap.exists()) {
 				const d = dataSnap.data() as any;
@@ -39,13 +51,6 @@ export default function HistoryGame() {
 		load();
 	}, [gameId]);
 
-	const labels = useMemo(
-		() => ({
-			w: intl.formatMessage({ id: 'player.white', defaultMessage: 'White' }),
-			b: intl.formatMessage({ id: 'player.black', defaultMessage: 'Black' }),
-		}),
-		[intl]
-	);
 
 	return (
 		<div style={{ paddingTop: 20 }}>

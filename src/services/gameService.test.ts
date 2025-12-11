@@ -4,11 +4,14 @@ import { vi } from 'vitest';
 vi.mock('firebase/firestore', async () => {
 	const updateDoc = vi.fn();
 	const arrayUnion = (...values: any[]) => ({ _arrayUnion: values });
-	return { updateDoc, arrayUnion };
+	const setDoc = vi.fn();
+	return { updateDoc, arrayUnion, setDoc };
 });
 
 const firestore = await import('firebase/firestore');
 const updateDoc = firestore.updateDoc as ReturnType<typeof vi.fn>;
+const setDoc = firestore.setDoc as ReturnType<typeof vi.fn>;
+const arrayUnion = firestore.arrayUnion;
 
 describe('gameService.updateMovesDoc', () => {
 	beforeEach(() => {
@@ -19,22 +22,24 @@ describe('gameService.updateMovesDoc', () => {
 		const movesRef = { id: 'movesRef' } as any;
 		const move = { from: 'e2', to: 'e4', extra: undefined };
 		await updateMovesDoc(movesRef, move, 'fen', 'pgn');
-		expect(updateDoc).toHaveBeenCalledWith(
+		expect(setDoc).toHaveBeenCalledWith(
 			movesRef,
 			expect.objectContaining({
+				gameId: 'movesRef',
 				moves: { _arrayUnion: [expect.objectContaining({ from: 'e2', to: 'e4' })] },
 				fen: 'fen',
 				pgn: 'pgn',
-			})
+			}),
+			expect.objectContaining({ merge: true })
 		);
 	});
 
 	it('marks player arrived writes to game and gameData', async () => {
 		const gameRef = { id: 'game' } as any;
 		const gameDataRef = { id: 'gameData' } as any;
-		await markPlayerArrived(gameRef, gameDataRef, 'white', 'uid');
+		await markPlayerArrived(gameRef, gameDataRef, 'white', 'uid', 'Name');
 		expect(updateDoc).toHaveBeenCalledTimes(2);
-		expect(updateDoc).toHaveBeenCalledWith(gameRef, { white: 'uid' });
+		expect(updateDoc).toHaveBeenCalledWith(gameRef, { white: 'uid', whiteName: 'Name', participants: { _arrayUnion: ['uid'] } });
 		expect(updateDoc).toHaveBeenCalledWith(gameDataRef, { whiteArrived: true });
 	});
 

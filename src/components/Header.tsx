@@ -31,7 +31,13 @@ export default function Header() {
 							<Nav.Link as={LangLink} to='/' onClick={() => setIsOpen(false)}>
 								<FormattedMessage id='to_main' />
 							</Nav.Link>
-							<Nav.Link as={CreateGame} buttonVariant='link' buttonSize='sm' classes='nav-link create-game-link' onClick={() => setIsOpen(false)}>
+							<Nav.Link
+								as={CreateGame}
+								buttonVariant='link'
+								buttonSize='sm'
+								classes='nav-link create-game-link'
+								onAfterSelect={() => setIsOpen(false)}
+							>
 								<FormattedMessage id='play_with_friend' />
 							</Nav.Link>
 							<Nav.Link as={LangLink} to='/single' onClick={() => setIsOpen(false)}>

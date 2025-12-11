@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext, useMemo } from 'react';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { Link } from 'react-router-dom';
 import { FormattedMessage, useIntl } from 'react-intl';
@@ -10,7 +10,8 @@ type GameRow = {
 	createdAt?: any;
 	white?: string | null;
 	black?: string | null;
-	opponentName?: string;
+	whiteName?: string | null;
+	blackName?: string | null;
 	opponentId?: string | null;
 };
 
@@ -31,42 +32,19 @@ export default function HistoryList() {
 			}
 			try {
 				const gamesRef = collection(db, 'games');
-				const [whiteSnap, blackSnap] = await Promise.all([getDocs(query(gamesRef, where('white', '==', uid))), getDocs(query(gamesRef, where('black', '==', uid)))]);
-				const rows: GameRow[] = [];
-				whiteSnap.forEach((doc) => rows.push({ id: doc.id, ...(doc.data() as any) }));
-				blackSnap.forEach((doc) => {
-					if (!rows.find((r) => r.id === doc.id)) rows.push({ id: doc.id, ...(doc.data() as any) });
-				});
-				// fetch opponent names
-				const uniqueOpponents = Array.from(
-					new Set(
-						rows
-							.map((g) => (g.white === uid ? g.black : g.white))
-							.filter((x): x is string => !!x)
-					)
-				);
-				const opponentMap: Record<string, string> = {};
-				await Promise.all(
-					uniqueOpponents.map(async (oid) => {
-						try {
-							const snap = await getDoc(doc(db, 'players', oid));
-							if (snap.exists()) {
-								const data = snap.data() as any;
-								opponentMap[oid] = data.displayName || data.email || oid;
-							} else {
-								opponentMap[oid] = oid;
-							}
-						} catch {
-							opponentMap[oid] = oid;
-						}
-					})
-				);
-				const withNames = rows.map((g) => {
-					const opp = g.white === uid ? g.black : g.white;
-					return { ...g, opponentId: opp ?? null, opponentName: opp ? opponentMap[opp] || opp : undefined };
-				});
+				const snap = await getDocs(query(gamesRef, where('participants', 'array-contains', uid)));
+				let rows: GameRow[] = [];
+				snap.forEach((doc) => rows.push({ id: doc.id, ...(doc.data() as any) }));
+				// Fallback for legacy games without participants field
+				if (rows.length === 0) {
+					const [whiteSnap, blackSnap] = await Promise.all([getDocs(query(gamesRef, where('white', '==', uid))), getDocs(query(gamesRef, where('black', '==', uid)))]);
+					whiteSnap.forEach((doc) => rows.push({ id: doc.id, ...(doc.data() as any) }));
+					blackSnap.forEach((doc) => {
+						if (!rows.find((r) => r.id === doc.id)) rows.push({ id: doc.id, ...(doc.data() as any) });
+					});
+				}
 				rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-				setGames(withNames);
+				setGames(rows);
 			} catch (e) {
 				console.error(e);
 			} finally {
@@ -100,11 +78,7 @@ export default function HistoryList() {
 									id='history.game_with'
 									defaultMessage='Game with {name}'
 									values={{
-										name: g.opponentName
-											? g.opponentName
-											: g.opponentId
-											? g.opponentId
-											: `${intl.formatMessage({ id: 'history.unknown', defaultMessage: 'Guest' })}`,
+										name: g.white === uid ? g.blackName || g.black : g.whiteName || g.white || intl.formatMessage({ id: 'history.unknown', defaultMessage: 'Guest' }),
 									}}
 								/>
 							</span>

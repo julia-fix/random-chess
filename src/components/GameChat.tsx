@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { Offcanvas } from 'react-bootstrap';
-import { doc, onSnapshot, DocumentReference, Unsubscribe, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot, DocumentReference, Unsubscribe, updateDoc, arrayUnion, runTransaction, setDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { UserContext } from '../contexts/UserContext';
 import { v4 as uuid } from 'uuid';
@@ -9,6 +9,7 @@ import ChatLayout from './ChatLayout';
 import ChatInput from './ChatInput';
 import chatStyle from '../scss/Chat.module.scss';
 import { FormattedMessage } from 'react-intl';
+import { logWrite } from '../utils/fbLogger';
 
 export default function GameChat({ gameId }: { gameId: string }) {
 	const [show, setShow] = useState(false);
@@ -24,6 +25,7 @@ export default function GameChat({ gameId }: { gameId: string }) {
 
 	useEffect(() => {
 		let unsubGameChat: Unsubscribe;
+		let creating = false;
 		const chatRef = doc(db, 'chats', gameId);
 
 		setMessagesRef(chatRef);
@@ -37,6 +39,12 @@ export default function GameChat({ gameId }: { gameId: string }) {
 				} else {
 					setMessages([]);
 					setUnreadCounter(0);
+					if (!creating) {
+						creating = true;
+						setDoc(chatRef, { gameId, messages: [], createdAt: new Date(), unread: {} }, { merge: true }).catch(() => {
+							creating = false;
+						});
+					}
 				}
 				setLoading(false);
 				setError(null);
@@ -86,19 +94,25 @@ export default function GameChat({ gameId }: { gameId: string }) {
 	const sendMessage = async (text: string) => {
 		if (!text.trim()) return;
 		if (messagesRef) {
-			await updateDoc(messagesRef, {
-				messages: arrayUnion({
-					createdAt: new Date(),
-					text,
-					msgId: uuid(),
-					author: {
-						uid: user.uid,
-						displayName: user.displayName,
-						photoURL: user.photoURL,
-						isAnonymous: user.isAnonymous,
-					},
-				}),
-			});
+			await logWrite(
+				'chat:sendMessage',
+				messagesRef,
+				{ text },
+				() =>
+					updateDoc(messagesRef, {
+						messages: arrayUnion({
+							createdAt: new Date(),
+							text,
+							msgId: uuid(),
+							author: {
+								uid: user.uid,
+								displayName: user.displayName,
+								photoURL: user.photoURL,
+								isAnonymous: user.isAnonymous,
+							},
+						}),
+					})
+			);
 
 			try {
 				await runTransaction(db, async (transaction) => {

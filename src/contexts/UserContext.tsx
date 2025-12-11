@@ -11,6 +11,7 @@ export interface UserProps {
 	isAnonymous: boolean;
 	photoURL: string | null;
 	uid: string | null;
+	emailVerified?: boolean;
 }
 
 const initialValue: UserProps = {
@@ -20,6 +21,7 @@ const initialValue: UserProps = {
 	isAnonymous: true,
 	photoURL: null,
 	uid: null,
+	emailVerified: undefined,
 };
 
 export const UserContext = createContext<UserProps>(initialValue);
@@ -29,8 +31,9 @@ export default function UserProvider({ children }: { children: React.ReactNode }
 
 	useEffect(() => {
 		const updateUser = async (user: UserProps) => {
-			if (user.uid) {
-				const docRef = doc(db, 'players', user.uid);
+			if (!user.uid) return;
+			const docRef = doc(db, 'players', user.uid);
+			try {
 				const docSnap = await getDoc(docRef);
 
 				if (docSnap.exists()) {
@@ -40,33 +43,51 @@ export default function UserProvider({ children }: { children: React.ReactNode }
 						await updateDoc(docRef, { displayName: user.displayName });
 					}
 					return;
-				} else {
-					await setDoc(docRef, {
-						displayName: user.displayName,
-						isAnonymous: user.isAnonymous,
-						photoURL: user.photoURL,
-						uid: user.uid,
-					});
 				}
+
+				await setDoc(docRef, {
+					displayName: user.displayName,
+					isAnonymous: user.isAnonymous,
+					photoURL: user.photoURL,
+					uid: user.uid,
+				});
+			} catch (e) {
+				console.error('[UserContext] Failed to sync player doc', { uid: user.uid, displayName: user.displayName }, e);
 			}
 		};
 
 		const unsubscribe = auth.onAuthStateChanged(
-			(user) => {
+			async (user) => {
 				if (user) {
-					// console.log('User is signed in.', user);
+					// Pull displayName from players doc if missing (e.g., after guest → email signup)
+					let effectiveName = user.displayName;
+					if (!effectiveName) {
+						try {
+							const docRef = doc(db, 'players', user.uid);
+							const snap = await getDoc(docRef);
+							if (snap.exists()) {
+								const data = snap.data() as any;
+								effectiveName = data.displayName || null;
+							}
+						} catch {
+							// ignore lookup errors
+						}
+					}
+					if (!effectiveName && user.email) {
+						effectiveName = user.email.split('@')[0];
+					}
 					const toUpdate = {
-						displayName: user.displayName,
+						displayName: effectiveName,
 						loggedIn: true,
 						loading: false,
 						isAnonymous: user.isAnonymous,
 						photoURL: user.photoURL,
 						uid: user.uid,
+						emailVerified: user.emailVerified ?? true,
 					};
 					setUser(toUpdate);
 					updateUser(toUpdate);
 				} else {
-					// console.log('No user is signed in.');
 					setUser({
 						displayName: null,
 						loggedIn: false,
@@ -74,6 +95,7 @@ export default function UserProvider({ children }: { children: React.ReactNode }
 						isAnonymous: true,
 						photoURL: null,
 						uid: null,
+						emailVerified: undefined,
 					});
 				}
 			},

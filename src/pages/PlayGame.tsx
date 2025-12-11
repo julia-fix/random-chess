@@ -36,6 +36,7 @@ export default function PlayGame() {
 	const [whiteTimeLeftMs, setWhiteTimeLeftMs] = useState<number>();
 	const [blackTimeLeftMs, setBlackTimeLeftMs] = useState<number>();
 	const [showRules, setShowRules] = useState(false);
+	const [localLastMoveAtMs, setLocalLastMoveAtMs] = useState<number | null>(null);
 
 	const intl = useIntl();
 
@@ -53,6 +54,12 @@ export default function PlayGame() {
 	const bothArrived = playersPresent.w && playersPresent.b;
 	const sessionError = useMemo(() => game === undefined && gameData === undefined && moves === undefined && !sessionLoading, [game, gameData, moves, sessionLoading]);
 	const lastMoveAtDate = useMemo(() => (gameData?.lastMoveAt && typeof (gameData.lastMoveAt as any)?.toDate === 'function' ? (gameData.lastMoveAt as any).toDate() : null), [gameData?.lastMoveAt]);
+	const effectiveLastMoveAt = useMemo(() => (localLastMoveAtMs ? new Date(localLastMoveAtMs) : lastMoveAtDate), [lastMoveAtDate, localLastMoveAtMs]);
+
+	useEffect(() => {
+		// Clear local override when fresh server timestamp arrives
+		setLocalLastMoveAtMs(null);
+	}, [lastMoveAtDate?.getTime()]);
 
 	const activeColor = useMemo(() => {
 		if (lastMove && (lastMove as any).color) {
@@ -61,17 +68,26 @@ export default function PlayGame() {
 		return 'w';
 	}, [lastMove]);
 
+	const hasMoved = useMemo(
+		() => ({
+			w: !!moves?.moves?.some((m) => m.color === 'w'),
+			b: !!moves?.moves?.some((m) => m.color === 'b'),
+		}),
+		[moves?.moves]
+	);
+
 	const getRemaining = useCallback(
 		(colorKey: 'w' | 'b') => {
 			const base = colorKey === 'w' ? whiteTimeLeftMs ?? 0 : blackTimeLeftMs ?? 0;
 			if (gameStatus === 'finished') return base;
-			if (activeColor === colorKey && lastMoveAtDate) {
-				const elapsed = Date.now() - lastMoveAtDate.getTime();
+			const waitingForFirstMove = !hasMoved[colorKey];
+			if (activeColor === colorKey && effectiveLastMoveAt && !waitingForFirstMove) {
+				const elapsed = Date.now() - effectiveLastMoveAt.getTime();
 				return Math.max(0, base - elapsed);
 			}
 			return base;
 		},
-		[activeColor, lastMoveAtDate, whiteTimeLeftMs, blackTimeLeftMs, gameStatus]
+		[activeColor, effectiveLastMoveAt, whiteTimeLeftMs, blackTimeLeftMs, gameStatus, hasMoved]
 	);
 
 	const [displayTick, setDisplayTick] = useState(0);
@@ -79,10 +95,14 @@ export default function PlayGame() {
 	const sendMove = async (move: any, fen: string, pgn: string) => {
 		setLastMove(move);
 		const movedColor = move.color as 'w' | 'b';
+		const nowMs = Date.now();
+		setLocalLastMoveAtMs(nowMs);
 		const currentWhite = getRemaining('w');
 		const currentBlack = getRemaining('b');
-		await updateMovesDoc(movesRef, move, fen, pgn);
-		await updateClocksOnMove(gameDataRef, movedColor, lastMoveAtDate, currentWhite, currentBlack);
+		const hasMovedBefore = hasMoved[movedColor];
+		const lastAt = new Date(nowMs);
+		await updateMovesDoc(movesRef, move, fen, pgn, gameId);
+		await updateClocksOnMove(gameDataRef, movedColor, lastAt, currentWhite, currentBlack, !hasMovedBefore);
 	};
 
 	const sendFirstCard = async (card: string | number) => {
@@ -100,12 +120,6 @@ export default function PlayGame() {
 				if (constantData.white === user.uid || constantData.black === user.uid) {
 					currentRole = 'participant';
 					currentColor = constantData.white === user.uid ? 'w' : 'b';
-				} else if (!updatingData.whiteArrived) {
-					currentRole = 'participant';
-					currentColor = 'w';
-				} else if (!updatingData.blackArrived) {
-					currentRole = 'participant';
-					currentColor = 'b';
 				} else {
 					currentRole = 'spectator';
 				}
@@ -145,9 +159,9 @@ export default function PlayGame() {
 
 	const setPlayerArrived = useCallback(
 		async (color: string) => {
-			await markPlayerArrived(gameRef, gameDataRef, color as 'white' | 'black', user.uid);
+			await markPlayerArrived(gameRef, gameDataRef, color as 'white' | 'black', user.uid, user.displayName);
 		},
-		[gameDataRef, gameRef, user.uid]
+		[gameDataRef, gameRef, user.displayName, user.uid]
 	);
 
 	const setGameStatusToPlaying = useCallback(async () => {
@@ -193,6 +207,13 @@ export default function PlayGame() {
 	);
 
 	const drawOfferBy = useMemo(() => (gameData?.drawOffer?.by as 'w' | 'b' | undefined) || undefined, [gameData?.drawOffer?.by]);
+	const playerLabels = useMemo(
+		() => ({
+			w: intl.formatMessage({ id: 'player.white', defaultMessage: 'White' }),
+			b: intl.formatMessage({ id: 'player.black', defaultMessage: 'Black' }),
+		}),
+		[intl]
+	);
 
 	const handleTimeoutEnd = useCallback(
 		async (timedOutColor: 'w' | 'b') => {
@@ -251,6 +272,19 @@ export default function PlayGame() {
 		await clearDrawOffer(gameDataRef);
 	}, [gameDataRef]);
 
+	const handleJoinSeat = useCallback(
+		async (seat: 'w' | 'b') => {
+			if (!gameRef || !gameDataRef) return;
+			if (role === 'participant') return;
+			if (gameStatus === 'finished') return;
+			if (players?.[seat]) return;
+			setRole('participant');
+			setColor(seat);
+			await markPlayerArrived(gameRef, gameDataRef, seat === 'w' ? 'white' : 'black', user.uid, user.displayName);
+		},
+		[gameRef, gameDataRef, role, gameStatus, players, user.uid, user.displayName]
+	);
+
 	if (sessionLoading) {
 		return <PageLoading />;
 	}
@@ -295,6 +329,8 @@ export default function PlayGame() {
 					sendFirstCard={sendFirstCard}
 					firstCard={firstCard}
 					players={players}
+					onJoinSeat={handleJoinSeat}
+					playerLabels={playerLabels}
 					shareControl={
 						bothArrived ? (
 							<ShareGame
@@ -307,7 +343,7 @@ export default function PlayGame() {
 				/>
 			)}
 
-			<GameChat gameId={gameId} />
+			{role === 'participant' && <GameChat gameId={gameId} />}
 			<GameRulesModal show={showRules} onHide={() => setShowRules(false)} />
 		</div>
 	);

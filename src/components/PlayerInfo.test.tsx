@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { IntlProvider } from 'react-intl';
 import PlayerInfo from './PlayerInfo';
 
 vi.mock('firebase/firestore', () => {
@@ -15,7 +16,11 @@ vi.mock('firebase/firestore', () => {
 
 describe('PlayerInfo', () => {
 	it('renders player info after load', async () => {
-		render(<PlayerInfo uid='uid' />);
+		render(
+			<IntlProvider locale='en' messages={{}}>
+				<PlayerInfo uid='uid' />
+			</IntlProvider>
+		);
 		await waitFor(() => expect(screen.getByText('Test')).toBeDefined());
 	});
 });

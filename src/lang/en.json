@@ -108,6 +108,8 @@
   "buttons.offer_draw": "Offer a draw",
   "draw.offered": "Draw offer sent",
   "draw.offer_from_opponent": "Opponent offers a draw",
+  "buttons.join_as": "Join as {color}",
+  "buttons.flip_board": "Flip board",
   "draw.accept": "Accept",
   "draw.decline": "Decline",
   "confirm.resign": "Are you sure you want to resign?",
@@ -119,5 +121,11 @@
   "game_chat": "Game chat",
   "enter_message": "Enter message",
   "invite_opponent": "Invite opponent",
-  "timer": "Timer"
+  "timer": "Timer",
+  "auth.reset_password": "Forgot password?",
+  "auth.reset_password.sent": "Password reset email sent. Please check your inbox, follow the instructions, then return to this form and enter the new password.",
+  "auth.verify_email.sent": "Verification email sent. Please check your inbox, click the link, then return and sign in.",
+  "auth.verify_email.prompt": "Please verify your email to continue. We just sent you a verification email.",
+  "auth.verify_email.continue": "I confirmed email",
+  "auth.verify_email.other": "Use another sign-in option"
 }
