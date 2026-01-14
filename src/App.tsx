@@ -1,6 +1,8 @@
 import ChessRoutes from './router';
 import { IntlProvider } from 'react-intl';
-import { currentLang } from './utils/settings';
+import { getLangFromPathname, getStoredLang } from './utils/settings';
+import { useLocation } from 'react-router-dom';
+import { useMemo } from 'react';
 
 import Russian from './lang/ru.json';
 import English from './lang/en.json';
@@ -18,6 +20,11 @@ const langs: LangList = {
 };
 
 function App() {
+	const location = useLocation();
+	const currentLang = useMemo(
+		() => getLangFromPathname(location.pathname, window.navigator.language, getStoredLang()),
+		[location.pathname]
+	);
 	return (
 		<IntlProvider locale={currentLang} messages={langs[currentLang]}>
 			<UserProvider>

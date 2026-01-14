@@ -1,69 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-// Use a concrete Stockfish worker build; import as URL so Vite serves it correctly.
-// eslint-disable-next-line import/no-relative-packages
-import stockfishWorkerUrl from 'stockfish/src/stockfish-17.1-lite-single-03e3232.js?url';
 import { Chess, Move } from 'chess.js';
 import Board from '../components/Board';
 import { drawNextCard, initialDeck } from '../utils/cardDeck';
 import isValidMove from '../utils/isValidMove';
 import GameRulesModal from '../components/GameRulesModal';
 import { FormattedMessage, useIntl } from 'react-intl';
-
-type BestMoveRequest = {
-	fen: string;
-	searchMoves: string[];
-	depth?: number;
-	skill?: number;
-};
-
-function useStockfishBestMove() {
-	const getBestMove = useCallback(async ({ fen, searchMoves, depth = 8, skill }: BestMoveRequest) => {
-		if (!searchMoves.length) return null;
-		return new Promise<string>((resolve) => {
-			const engine = new Worker(stockfishWorkerUrl);
-			let ready = false;
-			const timeout = setTimeout(() => {
-				engine.terminate();
-				resolve(null);
-			}, 5000);
-			engine.onmessage = (event: MessageEvent) => {
-				const text = typeof event.data === 'string' ? event.data : '';
-				if (!text) return;
-				if (text.includes('readyok')) {
-					ready = true;
-					if (skill !== undefined) {
-						engine.postMessage(`setoption name Skill Level value ${skill}`);
-					}
-					engine.postMessage('ucinewgame');
-					engine.postMessage(`position fen ${fen}`);
-					engine.postMessage(`go depth ${depth} searchmoves ${searchMoves.join(' ')}`);
-				}
-				if (text.startsWith('bestmove')) {
-					const parts = text.split(' ');
-					const best = parts[1];
-					engine.postMessage('quit');
-					engine.terminate();
-					clearTimeout(timeout);
-					if (best === '(none)' || best === '0000' || !best) {
-						resolve(null);
-						return;
-					}
-					resolve(best);
-				}
-			};
-			engine.postMessage('uci');
-			engine.postMessage('isready');
-			setTimeout(() => {
-				if (!ready) {
-					engine.postMessage(`position fen ${fen}`);
-					engine.postMessage(`go depth ${depth} searchmoves ${searchMoves.join(' ')}`);
-				}
-			}, 100);
-		});
-	}, []);
-
-	return { getBestMove };
-}
+import { useStockfishBestMove, WORKER_HARD_TIMEOUT_MS } from '../hooks/useStockfishBestMove';
+import usePageMeta from '../hooks/usePageMeta';
 
 const DEFAULT_LIMIT = 5 * 60 * 1000;
 const DEFAULT_SKILL = 10;
@@ -76,6 +19,12 @@ export default function ComputerGame() {
 	const [sessionId, setSessionId] = useState<number>(() => Date.now());
 	const [showRules, setShowRules] = useState(false);
 	const intl = useIntl();
+	usePageMeta({
+		titleId: 'meta.title.computer',
+		titleDefault: 'Play vs Computer | Random Chess',
+		descriptionId: 'meta.desc.computer',
+		descriptionDefault: 'Challenge Stockfish in Random Chess, adjust skill and timers, and practice tactics.',
+	});
 
 	const [fen, setFen] = useState<string>();
 	const [pgn, setPgn] = useState<string>();
@@ -86,7 +35,7 @@ export default function ComputerGame() {
 	const [lastMoveAt, setLastMoveAt] = useState<number>(Date.now());
 	const [gameStatus, setGameStatus] = useState<'waiting' | 'playing' | 'finished'>('playing');
 	const [winner, setWinner] = useState<'w' | 'b' | null>(null);
-	const [resultReason, setResultReason] = useState<'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other'>();
+	const [resultReason, setResultReason] = useState<'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'insufficient' | 'other'>();
 	const [movesList, setMovesList] = useState<any[]>([]);
 	const [pendingBotMove, setPendingBotMove] = useState(false);
 	const [skillLevel, setSkillLevel] = useState<number>(() => {
@@ -99,7 +48,7 @@ export default function ComputerGame() {
 		return DEFAULT_SKILL;
 	});
 
-	const { getBestMove } = useStockfishBestMove();
+	const { getBestMove, abortActive } = useStockfishBestMove();
 
 	// initialize first card
 	useEffect(() => {
@@ -177,7 +126,7 @@ export default function ComputerGame() {
 	}, []);
 
 	const finishGame = useCallback(
-		(winColor: 'w' | 'b' | null, reason: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other') => {
+		(winColor: 'w' | 'b' | null, reason: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'insufficient' | 'other') => {
 			if (gameStatus === 'finished') return;
 			setWinner(winColor);
 			setResultReason(reason);
@@ -203,6 +152,10 @@ export default function ComputerGame() {
 				finishGame(moveColor, 'checkmate');
 				return true;
 			}
+			if (game.isInsufficientMaterial()) {
+				finishGame(null, 'insufficient');
+				return true;
+			}
 			if (game.isStalemate()) {
 				finishGame(null, 'stalemate');
 				return true;
@@ -216,10 +169,10 @@ export default function ComputerGame() {
 		(move: any, newFen: string, newPgn: string) => {
 			const game = chessRef.current;
 			game.load(newFen);
-			const currentWhite = getRemaining('w');
-			const currentBlack = getRemaining('b');
-			setWhiteTimeLeftMs(currentWhite);
-			setBlackTimeLeftMs(currentBlack);
+			const currentWhiteAfterPlayer = getRemaining('w');
+			const currentBlackAfterPlayer = getRemaining('b');
+			setWhiteTimeLeftMs(currentWhiteAfterPlayer);
+			setBlackTimeLeftMs(currentBlackAfterPlayer);
 			setLastMove(move);
 			setFen(newFen);
 			setPgn(newPgn);
@@ -245,30 +198,95 @@ export default function ComputerGame() {
 				return;
 			}
 			const searchMoves = cardMoves.map((m) => `${m.from}${m.to}${m.promotion ?? ''}`);
-			const bestUci = await getBestMove({ fen: game.fen(), searchMoves, skill: skillLevel, depth: 8 });
+			let bestUci: string | null = null;
+			let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+			let timedOut = false;
+			try {
+				timeoutHandle = setTimeout(() => {
+					console.warn('[stockfish] bot move timed out waiting for engine, using fallback');
+					timedOut = true;
+					abortActive('bot-move-timeout');
+				}, WORKER_HARD_TIMEOUT_MS + 1000);
+				bestUci = await getBestMove({ fen: game.fen(), searchMoves, skill: skillLevel, depth: 8 });
+			} catch (err) {
+				// Fallback to a legal move if the engine misbehaves.
+				console.error('Stockfish failed to respond, using fallback move', err);
+				abortActive('bot-move-error');
+			} finally {
+				if (timeoutHandle) clearTimeout(timeoutHandle);
+			}
 			const chosen = cardMoves.find((m) => `${m.from}${m.to}${m.promotion ?? ''}` === bestUci) ?? cardMoves[0];
-			game.move({ from: chosen.from, to: chosen.to, promotion: chosen.promotion });
-			const nextCard = drawCardExternal(game, game);
+
+			const moveResult = game.move({ from: chosen.from, to: chosen.to, promotion: chosen.promotion });
+			if (!moveResult) {
+				console.error('[bot] failed to apply move, using first legal move hard fallback', chosen);
+				const fallback = cardMoves[0];
+				game.move({ from: fallback.from, to: fallback.to, promotion: fallback.promotion });
+			}
+			const newFen = game.fen();
 			const moveIndex = movesList.length + 1;
+			const currentWhite = getRemaining('w');
+			const currentBlack = getRemaining('b');
+			const currentGame = chessRef.current;
+			if (currentGame.isCheckmate()) {
+				const movePayload = { ...chosen, card, moveIndex, color: 'b', nextCard: undefined };
+				setMovesList((prev) => [...prev, movePayload]);
+				setLastMove(movePayload);
+				setFen(newFen);
+				setPgn(game.pgn());
+				setWhiteTimeLeftMs(currentWhite);
+				setBlackTimeLeftMs(currentBlack);
+				setLastMoveAt(Date.now());
+				finishGame('b', 'checkmate');
+				abortActive('bot-game-ended');
+				return;
+			}
+			if (currentGame.isStalemate()) {
+				const movePayload = { ...chosen, card, moveIndex, color: 'b', nextCard: undefined };
+				setMovesList((prev) => [...prev, movePayload]);
+				setLastMove(movePayload);
+				setFen(newFen);
+				setPgn(game.pgn());
+				setWhiteTimeLeftMs(currentWhite);
+				setBlackTimeLeftMs(currentBlack);
+				setLastMoveAt(Date.now());
+				finishGame(null, 'stalemate');
+				abortActive('bot-game-ended');
+				return;
+			}
+			if (currentGame.isInsufficientMaterial()) {
+				const movePayload = { ...chosen, card, moveIndex, color: 'b', nextCard: undefined };
+				setMovesList((prev) => [...prev, movePayload]);
+				setLastMove(movePayload);
+				setFen(newFen);
+				setPgn(game.pgn());
+				setWhiteTimeLeftMs(currentWhite);
+				setBlackTimeLeftMs(currentBlack);
+				setLastMoveAt(Date.now());
+				finishGame(null, 'insufficient');
+				abortActive('bot-game-ended');
+				return;
+			}
+			const nextCard = drawCardExternal(game, game);
+			const nextMoveIndex = movesList.length + 1;
 			const movePayload = {
 				...chosen,
 				card,
 				nextCard,
-				moveIndex,
+				moveIndex: nextMoveIndex,
 				color: 'b',
 			};
 			setMovesList((prev) => [...prev, movePayload]);
 			setLastMove(movePayload);
-			setFen(game.fen());
+			setFen(newFen);
 			setPgn(game.pgn());
-			const currentWhite = getRemaining('w');
-			const currentBlack = getRemaining('b');
-			setWhiteTimeLeftMs(currentWhite);
-			setBlackTimeLeftMs(currentBlack);
+			const currentWhiteAfterBot = getRemaining('w');
+			const currentBlackAfterBot = getRemaining('b');
+			setWhiteTimeLeftMs(currentWhiteAfterBot);
+			setBlackTimeLeftMs(currentBlackAfterBot);
 			setLastMoveAt(Date.now());
-			handleGameEndState('b', game.fen());
 		},
-		[drawCardExternal, finishGame, getBestMove, getRemaining, handleGameEndState, movesList.length]
+		[abortActive, drawCardExternal, finishGame, getBestMove, getRemaining, handleGameEndState, movesList.length]
 	);
 
 	// persist to localStorage
@@ -297,12 +315,20 @@ export default function ComputerGame() {
 		}
 	}, [fen, pgn, movesList, lastMove, firstCard, winner, resultReason, gameStatus, whiteTimeLeftMs, blackTimeLeftMs, lastMoveAt, activeColor, skillLevel]);
 
+	// Kill any running engine when the game ends to prevent stray workers on checkmate/stalemate.
+	useEffect(() => {
+		if (gameStatus === 'finished') {
+			abortActive('game-finished');
+		}
+	}, [gameStatus, abortActive]);
+
 	useEffect(() => {
 		if (!pendingBotMove || gameStatus !== 'playing') return;
 		setPendingBotMove(false);
 		const cardForBot = lastMove?.nextCard;
 		if (cardForBot !== undefined) {
-			setTimeout(() => botMove(cardForBot), 1500);
+			// setTimeout(() => botMove(cardForBot), 1500);
+			botMove(cardForBot);
 		}
 	}, [pendingBotMove, gameStatus, lastMove, botMove]);
 

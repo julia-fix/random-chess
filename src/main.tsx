@@ -13,12 +13,12 @@ if (import.meta.env.DEV) {
 	});
 }
 
+const baseName = import.meta.env.BASE_URL?.replace(/\/$/, '') || '';
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
 	// <React.StrictMode>
-	<BrowserRouter>
+	<BrowserRouter basename={baseName === '/' ? '' : baseName}>
 		<App />
 	</BrowserRouter>
 	// </React.StrictMode>
 );
-

@@ -43,14 +43,13 @@ if (appCheckKey) {
 
 // Verbose Firestore logging in development to trace permission issues
 // Guarded to work with test mocks that may not include setLogLevel.
-if (import.meta.env.DEV) {
-	try {
-		const maybeSetLogLevel = (Firestore as any).setLogLevel;
-		if (typeof maybeSetLogLevel === 'function') {
-			maybeSetLogLevel('debug');
-		}
-	} catch (e) {
-		// ignore missing setLogLevel in test mocks
+// Disable noisy Firestore logs to avoid console spam.
+try {
+	const maybeSetLogLevel = (Firestore as any).setLogLevel;
+	if (typeof maybeSetLogLevel === 'function') {
+		maybeSetLogLevel('error');
 	}
+} catch (e) {
+	// ignore missing setLogLevel in test mocks
 }
 // export const analytics = getAnalytics(app); // only if needed

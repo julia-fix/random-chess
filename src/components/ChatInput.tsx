@@ -1,5 +1,6 @@
 import inputStyle from '../scss/ChatInput.module.scss';
 import { useIntl } from 'react-intl';
+import { withBase } from '../utils/paths';
 
 export default function ChatInput({ sendMessage }: { sendMessage: (text: string) => Promise<void> }) {
 	const intl = useIntl();
@@ -22,7 +23,7 @@ export default function ChatInput({ sendMessage }: { sendMessage: (text: string)
 				className={inputStyle.input}
 			/>
 			<button type='submit' className={inputStyle.button}>
-				<img src='/chess/images/right-arrow.svg' alt='Send' />
+				<img src={withBase('images/right-arrow.svg')} alt='Send' />
 			</button>
 		</form>
 	);

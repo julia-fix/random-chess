@@ -5,6 +5,7 @@ import { IntlProvider } from 'react-intl';
 import English from '../lang/en.json';
 import '@testing-library/jest-dom';
 import { act } from 'react';
+import { vi } from 'vitest';
 
 vi.mock('firebase/firestore', () => {
 	const onSnapshot = vi.fn((ref: any, onNext: any) => {

@@ -1,46 +1,179 @@
-# Getting Started with Create React App
+# Random Chess
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Random Chess is a card-driven twist on classic chess. Each turn you draw a card that constrains your legal move, creating sharp tactical puzzles, surprising tempo swings, and a fresh kind of planning.
 
-## Available Scripts
+## Highlights
 
-In the project directory, you can run:
+- Card-constrained chess that stays faithful to core rules while adding fresh strategy.
+- Multiple play modes: online with friends, single-player, and Stockfish-powered computer games.
+- Match timers, shareable game links, and in-game chat for live sessions.
+- History views and mate practice for quick training.
+- Built with React + Vite, chess.js rules enforcement, and react-intl localization.
 
-### `yarn start`
+## Getting started
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Install
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+```bash
+npm install
+```
 
-### `yarn test`
+### Run locally
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+npm run dev
+```
 
-### `yarn build`
+### Build for production
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+npm run build
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Preview the production build
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm run preview
+```
 
-### `yarn eject`
+### Run tests
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+```bash
+npm test
+```
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Firebase setup
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### 1) Create Firebase project and web app
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+- Create a Firebase project and register a Web App.
+- Copy the config values into `.env` (see `.env.example`).
 
-## Learn More
+### 2) Enable Authentication
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+The app uses:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- Anonymous auth (guest play)
+- Email/password auth
+- Google sign-in
+
+Enable these providers in Firebase Authentication.
+
+### 3) Enable Firestore
+
+- Create a Firestore database.
+- Apply security rules from `firebaseRules.txt`.
+- Create collections:
+  - `games`
+  - `gameData`
+  - `gameMoves`
+  - `players`
+  - `chats`
+
+### 4) (Optional) App Check
+
+If you want App Check, enable reCAPTCHA Enterprise and set `VITE_APP_CHECK_SITE_KEY` (and optionally `VITE_APP_CHECK_DEBUG_TOKEN` for local dev).
+
+## Firestore data model
+
+Collections and document shapes created by the app:
+
+- `games/{gameId}`
+
+  - `white`: string | null (uid)
+  - `black`: string | null (uid)
+  - `participants`: string[] (uids)
+  - `whiteName`: string | null
+  - `blackName`: string | null
+  - `createdAt`: timestamp
+
+- `gameData/{gameId}`
+
+  - `status`: "waiting" | "playing" | "finished"
+  - `whiteArrived`: boolean
+  - `blackArrived`: boolean
+  - `firstCard`: string | number
+  - `gameId`: string (must match doc id)
+  - `timeLimitMs`: number
+  - `whiteTimeLeftMs`: number
+  - `blackTimeLeftMs`: number
+  - `lastMoveAt`: timestamp
+  - `winner`: "w" | "b" | null
+  - `resultReason`: "timeout" | "resign" | "agreement" | "stalemate" | "checkmate" | "insufficient" | "other"
+  - `drawOffer`: { by: "w" | "b" }
+
+- `gameMoves/{gameId}`
+
+  - `moves`: array of chess.js move objects
+  - `fen`: string
+  - `pgn`: string
+  - `gameId`: string (must match doc id)
+  - `createdAt`: timestamp
+
+- `chats/{gameId}`
+
+  - `gameId`: string (must match doc id)
+  - `messages`: array of
+    - `createdAt`: timestamp
+    - `text`: string
+    - `msgId`: string
+    - `author`: { uid, displayName, photoURL, isAnonymous }
+  - `unread`: map of uid -> number
+  - `createdAt`: timestamp
+
+- `players/{uid}`
+  - `uid`: string
+  - `displayName`: string | null
+  - `photoURL`: string | null
+  - `isAnonymous`: boolean
+
+## Deployment
+
+### Configure base path
+
+This app supports running from root or a subfolder. Set the base path via env:
+
+```
+VITE_BASE=/chess/
+```
+
+When running from root, set:
+
+```
+VITE_BASE=/
+```
+
+### Build and host
+
+```bash
+npm run build
+```
+
+Deploy the `dist/` folder to any static host (Firebase Hosting, Netlify, Vercel, Nginx, Apache).
+
+If you host under `/chess/` on Apache, use the provided `/.htaccess` as a starting point (updates the rewrite base to `/chess/`).
+
+## Game rules
+
+- Classic chess pieces and board.
+- Each turn you draw a card; your move must be legal in chess and satisfy that card.
+- If no legal move fits the card, a new card is drawn.
+
+### Cards in the deck and what they mean
+
+- 1-8: Move must start or end on that rank. Example: card 7 -> play Rd7 or d7-d5.
+- a-h: Move must start or end on that file. Example: card e -> play Re1 or e4xd5.
+- R, N, B, Q, K: Move must involve that piece (moving, capturing, or promoting to it for Q/B/R/N). Example: card R -> e7-e8=R or Ra1-a8.
+- p: Any pawn move (including captures and promotions). Example: card p -> e2-e4 or exd5.
+- take: The move must capture a piece. Example: card take -> Qxd7+.
+- check: The move must give check or checkmate. Example: card check -> Qh5+.
+- stalemate: Move must result in a stalemate position. Example: card stalemate -> force no legal moves without check.
+- any: Any legal chess move. Example: card any -> any legal move.
+- Castling squares: Castling allowed if the card matches a castling square (a/b/c/d/e for long, e/f/g/h for short, plus rank 1/8 for your color). Example: card a or d with 1 -> O-O-O as White; e/f/g/h with 8 -> O-O as Black.
+
+## Project structure (quick tour)
+
+- UI components: `src/components`
+- Pages/routes: `src/pages` and `src/router`
+- Chess utilities and card logic: `src/utils`
+- Localization strings: `src/lang`

@@ -11,7 +11,6 @@ export interface ModalTypes {
 const MyBootrapModal: React.FC<ModalTypes & InstanceProps<unknown>> = ({ isOpen, onResolve, onReject }) => {
 	const submit = (piece: string) => onResolve(piece);
 	const reject = () => onReject('rejected!!!');
-	// console.log('myBootstrapModal', isOpen, onResolve, onReject, text, title);
 
 	return (
 		<Modal show={isOpen} onHide={reject} centered>

@@ -5,6 +5,7 @@ import { db } from '../utils/firebase';
 import Board from '../components/Board';
 import GameRulesModal from '../components/GameRulesModal';
 import { FormattedMessage, useIntl } from 'react-intl';
+import usePageMeta from '../hooks/usePageMeta';
 
 export default function HistoryGame() {
 	const { gameId } = useParams<{ gameId: string }>();
@@ -15,6 +16,12 @@ export default function HistoryGame() {
 	const [resultReason, setResultReason] = useState<any>();
 	const [showRules, setShowRules] = useState(false);
 	const intl = useIntl();
+	usePageMeta({
+		titleId: 'meta.title.history_game',
+		titleDefault: 'Game Replay | Random Chess',
+		descriptionId: 'meta.desc.history_game',
+		descriptionDefault: 'Replay a finished game, review the moves, and see the final result.',
+	});
 	const defaultLabels = useMemo(
 		() => ({
 			w: intl.formatMessage({ id: 'player.white', defaultMessage: 'White' }),

@@ -33,12 +33,13 @@ interface NewSquare {
 type Props = {
 	fen?: string;
 	pgn?: string;
+	startFen?: string;
 	color?: 'w' | 'b';
 	role?: string;
 	timers?: { w?: string; b?: string };
 	gameStatus?: 'waiting' | 'playing' | 'finished';
 	winner?: 'w' | 'b' | null;
-	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other';
+	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'insufficient' | 'other';
 	drawOfferBy?: 'w' | 'b';
 	onResign?: () => void;
 	onOfferDraw?: () => void;
@@ -63,6 +64,7 @@ type Props = {
 function Board({
 	fen,
 	pgn,
+	startFen,
 	role,
 	color,
 	sendMove,
@@ -102,8 +104,8 @@ function Board({
 	const [knownLastMove, setKnownLastMove] = useState<any>();
 	const [inited, setInited] = useState(false);
 	const cardInitRef = useRef(false);
-	const loadedFenRef = useRef<string | undefined>();
-	const loadedPgnRef = useRef<string | undefined>();
+	const loadedFenRef = useRef<string | undefined>(undefined);
+	const loadedPgnRef = useRef<string | undefined>(undefined);
 	const boardWidth = useBoardSize(boardContainerRef);
 	const { card, setCard, drawCard, resetDeck, revertCard, cardsHistory } = useCardDeck(mode, game, gameCopy);
 	const [optionSquares, setOptionSquares] = useState({});
@@ -200,13 +202,19 @@ function Board({
 	}, [mode, color, firstCard, lastMove, drawCardFn, sendFirstCard, setCard]);
 
 	useEffect(() => {
-		if (firstCard && !card && !lastMove) setCard(firstCard);
-		else if (lastMove && !card) setCard(lastMove.nextCard);
-	}, [firstCard, lastMove, card]);
+		if (!lastMove) {
+			if (firstCard && !card) setCard(firstCard);
+			return;
+		}
+		// Always hand over the next card to the side that is about to move.
+		if (lastMove.nextCard !== undefined) {
+			setCard(lastMove.nextCard);
+		}
+	}, [firstCard, lastMove, card, setCard]);
 
 	useEffect(() => {
-		// console.log('lastMove changed', lastMove, knownLastMove);
 		if (lastMove) {
+			// Avoid reapplying moves when we already have the full move list rendered (e.g., history or synced games).
 			if (moveList && moveList.length) {
 				return;
 			}
@@ -268,17 +276,14 @@ function Board({
 
 	function commitMove(sourceSquare: Square, targetSquare: Square, promotion: PromotionType) {
 		if (gameStatus === 'finished') return;
-		// console.log('commitMove', sourceSquare, targetSquare, promotion);
 		const toMove: ShortMove = {
 			from: sourceSquare,
 			to: targetSquare,
 			promotion: promotion,
 		};
 		const move = game.move(toMove);
-		// console.log('commitMove move', move);
 		if (move) {
 			gameCopy.move(toMove);
-			// console.log('gameCopy moved');
 			let nextCard;
 			if (!game.isGameOver()) {
 				nextCard = drawCardFn();
@@ -303,8 +308,6 @@ function Board({
 				nextCard: nextCard,
 				moveIndex: game.history().length,
 			});
-			// console.log('game pgn', game.pgn());
-			// console.log('gamecopy pgn', gameCopy.pgn());
 			setMoveFrom('');
 			setOptionSquares({});
 		}
@@ -333,12 +336,10 @@ function Board({
 			} else {
 				promotionModal()
 					.then((res) => {
-						// console.log('Modal promise resolved', res);
 						promotion = res;
 						return commitDrop();
 					})
 					.catch(() => {
-						// console.log('Modal promise rejected');
 						promotion = 'q';
 						return commitDrop();
 					});
@@ -347,9 +348,7 @@ function Board({
 		} else return commitDrop();
 
 		function commitDrop() {
-			// console.log('commitDrop', sourceSquare, targetSquare, promotion);
 			let move = checkMove(sourceSquareTyped, targetSquareTyped, promotion, game, gameCopy, card);
-			// console.log('move', move);
 			if (move === null) return false; // illegal move
 
 			commitMove(sourceSquareTyped, targetSquareTyped, promotion);
@@ -381,7 +380,7 @@ function Board({
 		setOptionSquares(newSquares);
 	}
 
-	function handleSquareSelect({ square }: { piece: any; square: string }) {
+	function handleSquareSelect({ square }: { piece: any; square: string | null }) {
 		if (gameStatus === 'finished') return;
 		const squareTyped = square as Square;
 		function resetFirstMove(square: Square) {
@@ -447,15 +446,6 @@ function Board({
 		revertCard();
 	};
 
-	// const onPieceDragBegin = (piece: any, sourceSquare: any) => {
-	// 	console.log('piece', piece);
-	// 	console.log('sourceSquare', sourceSquare);
-	// 	if (piece.substring(0, 1) !== turn) {
-	// 		console.log('Wrong!');
-	// 		return false;
-	// 	}
-	// };
-
 	const playerColor = color || (mode === 'single' ? 'w' : 'w');
 	const opponentColor = playerColor === 'w' ? 'b' : 'w';
 	const playerRowStyle = { width: '100%', maxWidth: boardWidth, margin: '6px auto' };
@@ -480,7 +470,7 @@ function Board({
 	const goToPly = useCallback(
 		(target: number) => {
 			const clamped = Math.max(0, Math.min(target, historyMoves.length));
-			const viewer = new Chess();
+			const viewer = new Chess(startFen);
 			for (let i = 0; i < clamped; i += 1) {
 				try {
 					viewer.move(historyMoves[i]);
@@ -492,7 +482,7 @@ function Board({
 			setViewPly(clamped);
 			setOptionSquares({});
 		},
-		[historyMoves]
+		[historyMoves, startFen]
 	);
 
 	useEffect(() => {
@@ -696,14 +686,7 @@ function Board({
 				<FormattedMessage id={result} />
 			</p> */}
 
-			<ModalContainer
-				onOpen={() => {
-					// console.log('onopen');
-				}}
-				onRemove={() => {
-					// console.log('onRemove');
-				}}
-			/>
+			<ModalContainer />
 			{showResignConfirm && (
 				<div className='modal-overlay'>
 					<div className='modal-card'>

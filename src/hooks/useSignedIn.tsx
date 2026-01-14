@@ -20,7 +20,6 @@ export const useIsLoggedIn = () => {
 				auth.onAuthStateChanged(
 					(user) => {
 						if (user) {
-							// console.log('User is signed in.', user);
 							setUser({
 								displayName: user.displayName,
 								loggedIn: true,
@@ -28,7 +27,6 @@ export const useIsLoggedIn = () => {
 							});
 							resolve(user);
 						} else {
-							// console.log('No user is signed in.');
 							setUser({
 								displayName: null,
 								loggedIn: false,

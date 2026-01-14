@@ -67,4 +67,13 @@ describe('useGameSession', () => {
 		await act(async () => {});
 		expect(result.current.error).toBeDefined();
 	});
+
+	it('sets game_not_found when game snapshot is missing', async () => {
+		const { result } = renderHook(() => useGameSession('game-3'));
+		await act(async () => {});
+		await act(async () => {
+			snapshotHandlers[0]?.({ exists: () => false });
+		});
+		expect(result.current.error).toBe('game_not_found');
+	});
 });

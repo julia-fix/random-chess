@@ -9,6 +9,7 @@ import ChatLayout from './ChatLayout';
 import ChatInput from './ChatInput';
 import chatStyle from '../scss/Chat.module.scss';
 import { FormattedMessage } from 'react-intl';
+import { withBase } from '../utils/paths';
 import { logWrite } from '../utils/fbLogger';
 
 export default function GameChat({ gameId }: { gameId: string }) {
@@ -78,7 +79,6 @@ export default function GameChat({ gameId }: { gameId: string }) {
 						throw new Error('Counter is already set to 0!');
 					}
 				});
-				// console.log('resetUnread: Transaction successfully committed!');
 			} catch (e) {
 				// console.log('resetUnread: Transaction failed: ', e);
 			}
@@ -136,7 +136,6 @@ export default function GameChat({ gameId }: { gameId: string }) {
 						throw new Error('sendMessage: No new data to update!');
 					}
 				});
-				// console.log('sendMessage: Transaction successfully committed!');
 			} catch (e) {
 				// console.log('sendMessage: Transaction failed: ', e);
 			}
@@ -146,7 +145,7 @@ export default function GameChat({ gameId }: { gameId: string }) {
 	return (
 		<>
 			<div className={chatStyle.floatButton} onClick={handleShow}>
-				<img src='/chess/images/chat.svg' alt='Chat' />
+				<img src={withBase('images/chat.svg')} alt='Chat' />
 				{unreadCounter ? <div className={chatStyle.counter}>{unreadCounter}</div> : null}
 				{/* <div className={chatStyle.counter}>{unreadCounter}</div> */}
 			</div>

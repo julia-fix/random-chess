@@ -85,7 +85,7 @@ export async function setGameStatus(gameDataRef: DocumentReference | undefined, 
 export async function finishGame(
 	gameDataRef: DocumentReference | undefined,
 	winner: 'w' | 'b' | null,
-	resultReason: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other'
+	resultReason: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'insufficient' | 'other'
 ) {
 	if (!gameDataRef) return;
 	await logWrite(

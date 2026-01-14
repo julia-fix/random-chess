@@ -1,28 +1,49 @@
 import { Navbar, Nav, Container, NavDropdown, Offcanvas } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useState, useContext } from 'react';
-import { FormattedMessage } from 'react-intl';
+import { FormattedMessage, useIntl } from 'react-intl';
 import CreateGame from './CreateGame';
 import Avatar from './Avatar';
 import { UserContext } from '../contexts/UserContext';
 import { auth } from '../utils/firebase';
 import LangLink from './LangLink';
 import UserName from './UserName';
+import { setStoredLang } from '../utils/settings';
+import { stripBase, withBase } from '../utils/paths';
 
 export default function Header() {
 	const [isOpen, setIsOpen] = useState(false);
 	const user = useContext(UserContext);
+	const intl = useIntl();
+	const location = useLocation();
+	const targetLang = intl.locale === 'ru' ? 'en' : 'ru';
+	const localeCurrentLabel = intl.locale === 'ru' ? 'Ru' : 'En';
+	const langPath = (() => {
+		const { search, hash } = location;
+		const pathname = stripBase(location.pathname);
+		const match = pathname.match(/^\/(en|ru)(?=\/|$)/);
+		if (match) {
+			return `${pathname.replace(/^\/(en|ru)(?=\/|$)/, `/${targetLang}`)}${search}${hash}`;
+		}
+		if (pathname === '/') {
+			return `/${targetLang}${search}${hash}`;
+		}
+		if (pathname.startsWith('/')) {
+			return `/${targetLang}${pathname === '/' ? '' : pathname}${search}${hash}`;
+		}
+		return `/${targetLang}/${search}${hash}`;
+	})();
 	return (
 		<Navbar collapseOnSelect={true} expand='md' bg='dark' variant='dark' expanded={isOpen}>
 			<Container fluid>
 				<Navbar.Brand as={LangLink} to='/'>
-					<img src='/chess/images/randomchess-logo-white.svg' alt='Random Chess' style={{ width: 40 }} />
+					<img src={withBase('images/randomchess-logo-white.svg')} alt='Random Chess' style={{ width: 40 }} />
 				</Navbar.Brand>
 				<Navbar.Toggle aria-controls={`offcanvasNavbar-expand-md`} onClick={() => setIsOpen(!isOpen)} />
 				<Navbar.Offcanvas id={`offcanvasNavbar-expand-md`} aria-labelledby={`offcanvasNavbarLabel-expand-md`} placement='end' onHide={() => setIsOpen(false)}>
 					<Offcanvas.Header className='mob-nav-dark'>
 						<Offcanvas.Title id={`offcanvasNavbarLabel-expand-md`}>
-							<img src='/chess/images/randomchess-logo-white.svg' alt='Random Chess' style={{ width: 40 }} />
+							<img src={withBase('images/randomchess-logo-white.svg')} alt='Random Chess' style={{ width: 40 }} />
 						</Offcanvas.Title>
 						<button type='button' className='btn-close' aria-label='Close' onClick={() => setIsOpen(false)}></button>
 					</Offcanvas.Header>
@@ -79,10 +100,20 @@ export default function Header() {
 									</NavDropdown.Item>
 								</NavDropdown>
 							) : (
-								<Nav.Link as={Link} to='/chess/auth' onClick={() => setIsOpen(false)}>
+								<Nav.Link as={LangLink} to='/auth' onClick={() => setIsOpen(false)}>
 									<FormattedMessage id='login' />
 								</Nav.Link>
 							)}
+							<Nav.Link
+								as={Link}
+								to={langPath}
+								onClick={() => {
+									setStoredLang(targetLang);
+									setIsOpen(false);
+								}}
+							>
+								{localeCurrentLabel}
+							</Nav.Link>
 						</Nav>
 					</Offcanvas.Body>
 				</Navbar.Offcanvas>

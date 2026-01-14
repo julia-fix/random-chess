@@ -1,7 +1,8 @@
 import { useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { FormattedMessage } from 'react-intl';
+import { FormattedMessage, useIntl } from 'react-intl';
 import { auth } from '../utils/firebase';
+import usePageMeta from '../hooks/usePageMeta';
 import {
 	GoogleAuthProvider,
 	signInAnonymously,
@@ -35,6 +36,13 @@ export default function Auth() {
 	const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
 	const location = useLocation();
 	const navigate = useNavigate();
+	const intl = useIntl();
+	usePageMeta({
+		titleId: 'meta.title.auth',
+		titleDefault: 'Login | Random Chess',
+		descriptionId: 'meta.desc.auth',
+		descriptionDefault: 'Sign in or continue as a guest to create online games, save history, and chat with opponents.',
+	});
 
 	const redirectUrl = useMemo(() => {
 		const params = new URLSearchParams(location.search);
@@ -51,9 +59,9 @@ export default function Auth() {
 		if (redirectUrl) {
 			navigate(redirectUrl, { replace: true });
 		} else {
-			navigate('/chess/', { replace: true });
+			navigate(`/${intl.locale}/`, { replace: true });
 		}
-	}, [redirectUrl, navigate]);
+	}, [redirectUrl, navigate, intl.locale]);
 
 	const resetEmailFlow = () => {
 		setEmailExists(null);

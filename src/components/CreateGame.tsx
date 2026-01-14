@@ -5,6 +5,7 @@ import { db } from '../utils/firebase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from 'react-bootstrap';
 import { useContext, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { UserContext } from '../contexts/UserContext';
 import TimerPickerModal from './TimerPickerModal';
 
@@ -24,6 +25,7 @@ export default function CreateGame({
 	const user = useContext(UserContext);
 	const navigate = useNavigate();
 	const location = useLocation();
+	const intl = useIntl();
 	const [timerLimit, setTimerLimit] = useState<number>(5 * 60 * 1000); // default 5 minutes
 	const [showTimerPicker, setShowTimerPicker] = useState(false);
 	const timerOptions = [
@@ -37,7 +39,7 @@ export default function CreateGame({
 	const createGame = async (selectedTimer?: number) => {
 		// Require login before creating a game; redirect to auth preserving current path
 		if (!user.loggedIn || !user.uid) {
-			navigate('/chess/auth?redirectUrl=' + encodeURIComponent(location.pathname));
+			navigate(`/${intl.locale}/auth?redirectUrl=` + encodeURIComponent(location.pathname + location.search));
 			return;
 		}
 
@@ -56,19 +58,14 @@ export default function CreateGame({
 
 		// Write token to localStorage
 		// localStorage.setItem('playerToken', playersTokens[color]);
-		const newGame = await addDoc(
-			collection(db, 'games'),
-			{
-				createdAt: serverTimestamp(),
-				black: playersTokens.b,
-				white: playersTokens.w,
-				blackName: playerNames.b,
-				whiteName: playerNames.w,
-				participants: playersTokens.b || playersTokens.w ? [user.uid] : [],
-			},
-			{ signal: undefined }
-		);
-		// console.log(newGame);
+		const newGame = await addDoc(collection(db, 'games'), {
+			createdAt: serverTimestamp(),
+			black: playersTokens.b,
+			white: playersTokens.w,
+			blackName: playerNames.b,
+			whiteName: playerNames.w,
+			participants: playersTokens.b || playersTokens.w ? [user.uid] : [],
+		});
 
 		await setDoc(
 			doc(db, 'gameData', newGame.id),
@@ -87,7 +84,7 @@ export default function CreateGame({
 			{ merge: true }
 		);
 
-		navigate(`/chess/play/${newGame.id}`);
+		navigate(`/${intl.locale}/play/${newGame.id}`);
 	};
 
 	return (

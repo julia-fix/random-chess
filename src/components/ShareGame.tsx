@@ -9,11 +9,17 @@ type ShareGameProps = {
 	compact?: boolean;
 };
 
+const stripLangFromUrl = (rawUrl: string) => {
+	if (!rawUrl) return rawUrl;
+	return rawUrl.replace('/ru/', '/').replace('/en/', '/');
+};
+
 /**
  * Share button that tries the native share sheet and falls back to popular options.
  */
 export default function ShareGame({ url, title = 'Random Chess game', compact = false }: ShareGameProps) {
 	const shareUrl = useMemo(() => url || (typeof window !== 'undefined' ? window.location.href : ''), [url]);
+	const copyUrl = useMemo(() => stripLangFromUrl(shareUrl), [shareUrl]);
 	const [status, setStatus] = useState<string | null>(null);
 	const supportsShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
@@ -32,7 +38,7 @@ export default function ShareGame({ url, title = 'Random Chess game', compact = 
 
 	const copyLink = async () => {
 		try {
-			await navigator.clipboard.writeText(shareUrl);
+			await navigator.clipboard.writeText(copyUrl);
 			setStatus('Link copied!');
 		} catch {
 			setStatus('Copy failed, please copy manually.');

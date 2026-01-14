@@ -5,8 +5,6 @@ import { Chess, Move } from 'chess.js';
  * Checks if the move is valid according to selected card
  */
 const isValidMove = (move: Move, cardToCheck: string | number, game: Chess) => {
-	// console.log('cardToCheck', cardToCheck);
-	// console.log('move', move);
 	if (cardToCheck === 'any') return true;
 	if (numbers.indexOf(cardToCheck as number) > -1 || letters.indexOf(cardToCheck as string) > -1) {
 		if (move.from.indexOf(cardToCheck.toString()) > -1 || move.to.indexOf(cardToCheck.toString()) > -1) {

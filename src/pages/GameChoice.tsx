@@ -3,9 +3,16 @@ import CreateGame from '../components/CreateGame';
 import LangLink from '../components/LangLink';
 import { useState } from 'react';
 import GameRulesModal from '../components/GameRulesModal';
+import usePageMeta from '../hooks/usePageMeta';
 
 export default function GameChoice() {
 	const [showRules, setShowRules] = useState(false);
+	usePageMeta({
+		titleId: 'meta.title.choose_mode',
+		titleDefault: 'Choose Mode | Random Chess',
+		descriptionId: 'meta.desc.choose_mode',
+		descriptionDefault: 'Pick a mode, review the rules, and start a Random Chess game with friends, solo, or against the computer.',
+	});
 
 	return (
 		<>

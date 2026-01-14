@@ -22,7 +22,7 @@ export type GameDataDoc = {
 	blackTimeLeftMs?: number;
 	lastMoveAt?: any;
 	winner?: 'w' | 'b' | null;
-	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'other';
+	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'insufficient' | 'other';
 	drawOffer?: { by: 'w' | 'b' };
 };
 

@@ -4,6 +4,7 @@ import { db } from '../utils/firebase';
 import { Link } from 'react-router-dom';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { UserContext } from '../contexts/UserContext';
+import usePageMeta from '../hooks/usePageMeta';
 
 type GameRow = {
 	id: string;
@@ -20,6 +21,12 @@ export default function HistoryList() {
 	const [games, setGames] = useState<GameRow[]>([]);
 	const [loading, setLoading] = useState(true);
 	const intl = useIntl();
+	usePageMeta({
+		titleId: 'meta.title.history',
+		titleDefault: 'Game History | Random Chess',
+		descriptionId: 'meta.desc.history',
+		descriptionDefault: 'Browse your past Random Chess games and open full replays.',
+	});
 
 	const uid = useMemo(() => user.uid, [user.uid]);
 
