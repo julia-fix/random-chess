@@ -20,7 +20,11 @@ vi.mock('firebase/firestore', () => {
 		snapshotHandlers.push(onNext);
 		onNext({
 			exists: () => true,
-			data: () => (ref.collection === 'games' ? { white: 'w', black: 'b' } : { status: 'waiting' }),
+			data: () => {
+				if (ref.collection === 'games') return { white: 'w', black: 'b' };
+				if (ref.collection === 'gameMoves') return { moves: [{ from: 'e2', to: 'e4' }], fen: 'fen', pgn: 'pgn' };
+				return { status: 'waiting' };
+			},
 		});
 		return () => {};
 	});

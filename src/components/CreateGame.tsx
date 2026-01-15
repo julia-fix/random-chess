@@ -1,6 +1,7 @@
 import { collection, addDoc, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 // import { v4 as uuid } from 'uuid';
 import { db } from '../utils/firebase';
+import { ttlExpiresAt } from '../utils/ttl';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from 'react-bootstrap';
@@ -60,6 +61,7 @@ export default function CreateGame({
 		// localStorage.setItem('playerToken', playersTokens[color]);
 		const newGame = await addDoc(collection(db, 'games'), {
 			createdAt: serverTimestamp(),
+			expiresAt: ttlExpiresAt(),
 			black: playersTokens.b,
 			white: playersTokens.w,
 			blackName: playerNames.b,
@@ -74,8 +76,11 @@ export default function CreateGame({
 				status: 'waiting',
 				whiteArrived: color === 'w',
 				blackArrived: color === 'b',
+				whiteLastActiveAt: color === 'w' ? serverTimestamp() : null,
+				blackLastActiveAt: color === 'b' ? serverTimestamp() : null,
 				firstCard: '',
 				createdAt: serverTimestamp(),
+				expiresAt: ttlExpiresAt(),
 				timeLimitMs: chosenTimer,
 				whiteTimeLeftMs: chosenTimer,
 				blackTimeLeftMs: chosenTimer,

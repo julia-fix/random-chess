@@ -17,6 +17,7 @@ import {
 	offerDraw,
 	clearDrawOffer,
 	setClocksSnapshot,
+	updatePlayerLastActive,
 } from '../services/gameService';
 import { GameDataDoc, GameDoc } from '../types/game';
 import PageLoading from '../components/PageLoading';
@@ -37,6 +38,7 @@ export default function PlayGame() {
 	const [blackTimeLeftMs, setBlackTimeLeftMs] = useState<number>();
 	const [showRules, setShowRules] = useState(false);
 	const [localLastMoveAtMs, setLocalLastMoveAtMs] = useState<number | null>(null);
+	const ACTIVE_PING_MS = 30000;
 
 	const intl = useIntl();
 
@@ -60,6 +62,37 @@ export default function PlayGame() {
 		// Clear local override when fresh server timestamp arrives
 		setLocalLastMoveAtMs(null);
 	}, [lastMoveAtDate?.getTime()]);
+
+	useEffect(() => {
+		if (!gameDataRef || role !== 'participant' || !color) return;
+		if (typeof document === 'undefined') return;
+
+		let intervalId: ReturnType<typeof setInterval> | undefined;
+
+		const ping = () => updatePlayerLastActive(gameDataRef, color);
+
+		const handleVisibility = () => {
+			if (document.visibilityState === 'visible') {
+				ping();
+				if (!intervalId) {
+					intervalId = setInterval(ping, ACTIVE_PING_MS);
+				}
+			} else if (intervalId) {
+				clearInterval(intervalId);
+				intervalId = undefined;
+			}
+		};
+
+		handleVisibility();
+		document.addEventListener('visibilitychange', handleVisibility);
+		window.addEventListener('focus', handleVisibility);
+
+		return () => {
+			if (intervalId) clearInterval(intervalId);
+			document.removeEventListener('visibilitychange', handleVisibility);
+			window.removeEventListener('focus', handleVisibility);
+		};
+	}, [gameDataRef, role, color]);
 
 	const activeColor = useMemo(() => {
 		if (lastMove && (lastMove as any).color) {
@@ -207,6 +240,10 @@ export default function PlayGame() {
 	);
 
 	const drawOfferBy = useMemo(() => (gameData?.drawOffer?.by as 'w' | 'b' | undefined) || undefined, [gameData?.drawOffer?.by]);
+	const unreadCount = useMemo(() => {
+		if (!user.uid) return 0;
+		return gameData?.unreadByUid?.[user.uid] ?? 0;
+	}, [gameData?.unreadByUid, user.uid]);
 	const playerLabels = useMemo(
 		() => ({
 			w: intl.formatMessage({ id: 'player.white', defaultMessage: 'White' }),
@@ -343,7 +380,14 @@ export default function PlayGame() {
 				/>
 			)}
 
-			{role === 'participant' && <GameChat gameId={gameId} />}
+			{role === 'participant' && (
+				<GameChat
+					gameId={gameId}
+					gameDataRef={gameDataRef}
+					players={players}
+					unreadCount={unreadCount}
+				/>
+			)}
 			<GameRulesModal show={showRules} onHide={() => setShowRules(false)} />
 		</div>
 	);

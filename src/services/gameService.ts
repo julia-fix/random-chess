@@ -1,5 +1,6 @@
 import * as Firestore from 'firebase/firestore';
 import { logWrite } from '../utils/fbLogger';
+import { ttlExpiresAt } from '../utils/ttl';
 
 type DocumentReference = Firestore.DocumentReference;
 const safeGet = (key: string) => {
@@ -48,6 +49,7 @@ export async function updateMovesDoc(movesRef: DocumentReference | undefined, mo
 				fen,
 				pgn,
 				createdAt: maybeServerTimestamp(),
+				expiresAt: ttlExpiresAt(),
 			},
 			{ merge: true }
 		)
@@ -68,12 +70,21 @@ export async function markPlayerArrived(
 ) {
 	if (!gameRef || !gameDataRef || !uid) return;
 	const nameKey = `${colorKey}Name`;
+	const activeKey = `${colorKey}LastActiveAt`;
 	const playerName = displayName || 'Guest';
 	await logWrite('markPlayerArrived:game', gameRef, { [colorKey]: uid, [nameKey]: playerName }, () =>
 		Firestore.updateDoc(gameRef, { [colorKey]: uid, [nameKey]: playerName, participants: maybeArrayUnion(uid) })
 	);
 	await logWrite('markPlayerArrived:gameData', gameDataRef, { [`${colorKey}Arrived`]: true }, () =>
-		Firestore.updateDoc(gameDataRef, { [`${colorKey}Arrived`]: true })
+		Firestore.updateDoc(gameDataRef, { [`${colorKey}Arrived`]: true, [activeKey]: maybeServerTimestamp() })
+	);
+}
+
+export async function updatePlayerLastActive(gameDataRef: DocumentReference | undefined, color: 'w' | 'b') {
+	if (!gameDataRef) return;
+	const activeKey = color === 'w' ? 'whiteLastActiveAt' : 'blackLastActiveAt';
+	await logWrite('updatePlayerLastActive', gameDataRef, { activeKey }, () =>
+		Firestore.updateDoc(gameDataRef, { [activeKey]: maybeServerTimestamp() })
 	);
 }
 

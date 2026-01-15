@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import { Offcanvas } from 'react-bootstrap';
 import { doc, onSnapshot, DocumentReference, Unsubscribe, updateDoc, arrayUnion, runTransaction, setDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
@@ -11,11 +11,18 @@ import chatStyle from '../scss/Chat.module.scss';
 import { FormattedMessage } from 'react-intl';
 import { withBase } from '../utils/paths';
 import { logWrite } from '../utils/fbLogger';
+import { ttlExpiresAt } from '../utils/ttl';
 
-export default function GameChat({ gameId }: { gameId: string }) {
+type Props = {
+	gameId: string;
+	gameDataRef?: DocumentReference;
+	players?: { w: string | null; b: string | null };
+	unreadCount?: number;
+};
+
+export default function GameChat({ gameId, gameDataRef, players, unreadCount = 0 }: Props) {
 	const [show, setShow] = useState(false);
 	const [messages, setMessages] = useState<any[]>();
-	const [unreadCounter, setUnreadCounter] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const user = useContext(UserContext);
@@ -30,19 +37,24 @@ export default function GameChat({ gameId }: { gameId: string }) {
 		const chatRef = doc(db, 'chats', gameId);
 
 		setMessagesRef(chatRef);
+		if (!show) {
+			return () => {
+				unsubGameChat && unsubGameChat();
+			};
+		}
+		setLoading(true);
+		setError(null);
 		unsubGameChat = onSnapshot(
 			chatRef,
 			(chatSnap) => {
 				const data = chatSnap.data();
 				if (data) {
 					setMessages(data.messages);
-					setUnreadCounter(data.unread[user.uid as string] || 0);
 				} else {
 					setMessages([]);
-					setUnreadCounter(0);
 					if (!creating) {
 						creating = true;
-						setDoc(chatRef, { gameId, messages: [], createdAt: new Date(), unread: {} }, { merge: true }).catch(() => {
+						setDoc(chatRef, { gameId, messages: [], createdAt: new Date(), expiresAt: ttlExpiresAt() }, { merge: true }).catch(() => {
 							creating = false;
 						});
 					}
@@ -59,37 +71,28 @@ export default function GameChat({ gameId }: { gameId: string }) {
 		return () => {
 			unsubGameChat && unsubGameChat();
 		};
-	}, [gameId, user.uid]);
+	}, [gameId, show]);
 
 	const resetUnread = useCallback(async () => {
-		if (messagesRef) {
+		if (gameDataRef && user.uid) {
 			try {
-				await runTransaction(db, async (transaction) => {
-					const chatDoc = await transaction.get(messagesRef);
-					if (!chatDoc.exists()) {
-						throw new Error('Document chatDoc does not exist!');
-					}
-
-					let oldUnread = chatDoc.data().unread;
-
-					let newUnread = { ...oldUnread, [user.uid as string]: 0 };
-					if (oldUnread[user.uid as string] !== 0) {
-						transaction.update(messagesRef, { unread: newUnread });
-					} else {
-						throw new Error('Counter is already set to 0!');
-					}
-				});
+				await updateDoc(gameDataRef, { [`unreadByUid.${user.uid}`]: 0 });
 			} catch (e) {
 				// console.log('resetUnread: Transaction failed: ', e);
 			}
 		}
-	}, [messagesRef, user.uid]);
+	}, [gameDataRef, user.uid]);
 
 	useEffect(() => {
 		if (show) {
 			resetUnread();
 		}
 	}, [show, messages, resetUnread]);
+
+	const recipientIds = useMemo(() => {
+		const ids = [players?.w, players?.b].filter(Boolean) as string[];
+		return Array.from(new Set(ids)).filter((id) => id !== user.uid);
+	}, [players?.w, players?.b, user.uid]);
 
 	const sendMessage = async (text: string) => {
 		if (!text.trim()) return;
@@ -111,31 +114,22 @@ export default function GameChat({ gameId }: { gameId: string }) {
 								isAnonymous: user.isAnonymous,
 							},
 						}),
+						expiresAt: ttlExpiresAt(),
 					})
 			);
 
 			try {
-				await runTransaction(db, async (transaction) => {
-					const chatDoc = await transaction.get(messagesRef);
-					if (!chatDoc.exists()) {
-						throw new Error('Document does not exist!');
-					}
-
-					let newUnread = { ...chatDoc.data().unread };
-					let hasNewData = false;
-					for (let playerId in newUnread) {
-						if (playerId !== user.uid) {
-							newUnread[playerId]++;
-							hasNewData = true;
-						}
-					}
-
-					if (hasNewData) {
-						transaction.update(messagesRef, { unread: newUnread });
-					} else {
-						throw new Error('sendMessage: No new data to update!');
-					}
-				});
+				if (gameDataRef && recipientIds.length) {
+					await runTransaction(db, async (transaction) => {
+						const gameDataSnap = await transaction.get(gameDataRef);
+						const current = (gameDataSnap.data()?.unreadByUid as Record<string, number>) || {};
+						const next = { ...current };
+						recipientIds.forEach((id) => {
+							next[id] = (next[id] || 0) + 1;
+						});
+						transaction.update(gameDataRef, { unreadByUid: next });
+					});
+				}
 			} catch (e) {
 				// console.log('sendMessage: Transaction failed: ', e);
 			}
@@ -146,7 +140,7 @@ export default function GameChat({ gameId }: { gameId: string }) {
 		<>
 			<div className={chatStyle.floatButton} onClick={handleShow}>
 				<img src={withBase('images/chat.svg')} alt='Chat' />
-				{unreadCounter ? <div className={chatStyle.counter}>{unreadCounter}</div> : null}
+				{unreadCount ? <div className={chatStyle.counter}>{unreadCount}</div> : null}
 				{/* <div className={chatStyle.counter}>{unreadCounter}</div> */}
 			</div>
 

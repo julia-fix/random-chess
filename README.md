@@ -86,6 +86,7 @@ Collections and document shapes created by the app:
   - `whiteName`: string | null
   - `blackName`: string | null
   - `createdAt`: timestamp
+  - `expiresAt`: timestamp (TTL)
 
 - `gameData/{gameId}`
 
@@ -98,9 +99,13 @@ Collections and document shapes created by the app:
   - `whiteTimeLeftMs`: number
   - `blackTimeLeftMs`: number
   - `lastMoveAt`: timestamp
+  - `expiresAt`: timestamp (TTL)
+  - `whiteLastActiveAt`: timestamp
+  - `blackLastActiveAt`: timestamp
   - `winner`: "w" | "b" | null
   - `resultReason`: "timeout" | "resign" | "agreement" | "stalemate" | "checkmate" | "insufficient" | "other"
   - `drawOffer`: { by: "w" | "b" }
+  - `unreadByUid`: map of uid -> number (unread chat messages)
 
 - `gameMoves/{gameId}`
 
@@ -109,6 +114,7 @@ Collections and document shapes created by the app:
   - `pgn`: string
   - `gameId`: string (must match doc id)
   - `createdAt`: timestamp
+  - `expiresAt`: timestamp (TTL)
 
 - `chats/{gameId}`
 
@@ -118,8 +124,9 @@ Collections and document shapes created by the app:
     - `text`: string
     - `msgId`: string
     - `author`: { uid, displayName, photoURL, isAnonymous }
-  - `unread`: map of uid -> number
   - `createdAt`: timestamp
+  - `expiresAt`: timestamp (TTL)
+  - Note: chat messages are loaded on-demand when the chat panel is opened.
 
 - `players/{uid}`
   - `uid`: string

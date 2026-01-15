@@ -205,14 +205,14 @@ export default function Auth() {
 	};
 
 	useEffect(() => {
-		if (user.loggedIn && (user.emailVerified ?? true)) {
+		if (user.loggedIn && (user.isAnonymous || (user.emailVerified ?? true))) {
 			redirectAfterLogin();
 		}
-	}, [user.loggedIn, user.emailVerified, redirectAfterLogin]);
+	}, [user.loggedIn, user.emailVerified, user.isAnonymous, redirectAfterLogin]);
 
 if (user.loading) return <PageLoading />;
 
-if (user.loggedIn && (user.emailVerified ?? true)) return <PageLoading />;
+if (user.loggedIn && (user.isAnonymous || (user.emailVerified ?? true))) return <PageLoading />;
 
 	const handleVerifiedContinue = () => {
 		setVerifyInfo(null);

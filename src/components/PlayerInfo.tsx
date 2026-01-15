@@ -1,4 +1,4 @@
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
@@ -26,10 +26,11 @@ export default function PlayerInfo({ uid, timer, isActive, fallbackName }: { uid
 			return;
 		}
 		const docRef = doc(db, 'players', uid);
+		let cancelled = false;
 		setLoading(true);
-		const unsub = onSnapshot(
-			docRef,
-			(snap) => {
+		getDoc(docRef)
+			.then((snap) => {
+				if (cancelled) return;
 				if (snap.exists()) {
 					setPlayer(snap.data() as PlayerDoc);
 					setError(null);
@@ -38,13 +39,15 @@ export default function PlayerInfo({ uid, timer, isActive, fallbackName }: { uid
 					setError('not_found');
 				}
 				setLoading(false);
-			},
-			(err) => {
+			})
+			.catch((err) => {
+				if (cancelled) return;
 				setError(err.message);
 				setLoading(false);
-			}
-		);
-		return () => unsub();
+			});
+		return () => {
+			cancelled = true;
+		};
 	}, [uid]);
 
 	return (

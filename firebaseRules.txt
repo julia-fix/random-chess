@@ -29,11 +29,11 @@ service cloud.firestore {
     match /games/{gameId} {
       allow read: if isAuthed();
       allow create: if isAuthed()
-        && request.resource.data.keys().hasOnly(['white','black','participants','whiteName','blackName','createdAt'])
+        && request.resource.data.keys().hasOnly(['white','black','participants','whiteName','blackName','createdAt','expiresAt'])
         && (!('participants' in request.resource.data) || request.resource.data.participants is list || request.resource.data.participants is map);
       allow update: if request.auth != null
         && (isParticipant(resource.data) || gameHasOpenSeat(resource.data) || isParticipant(request.resource.data))
-        && request.resource.data.keys().hasOnly(['white','black','participants','whiteName','blackName','createdAt'])
+        && request.resource.data.keys().hasOnly(['white','black','participants','whiteName','blackName','createdAt','expiresAt'])
         && (!('participants' in request.resource.data) || request.resource.data.participants is list || request.resource.data.participants is map)
         && seatChangeAllowed();
       allow delete: if false;
@@ -44,20 +44,22 @@ service cloud.firestore {
       allow create: if isAuthed() && request.resource.data.gameId == gameId
         && request.resource.data.keys().hasOnly([
           'status','whiteArrived','blackArrived','firstCard','gameId','createdAt',
-          'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt',
-          'winner','resultReason','drawOffer'
+          'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt','expiresAt',
+          'whiteLastActiveAt','blackLastActiveAt','winner','resultReason','drawOffer','unreadByUid'
         ])
         && (!('drawOffer' in request.resource.data) || true)
+        && (!('unreadByUid' in request.resource.data) || request.resource.data.unreadByUid is map)
         && (!('winner' in request.resource.data) || request.resource.data.winner in ['w','b',null])
         && (!('resultReason' in request.resource.data) || request.resource.data.resultReason in ['timeout','resign','agreement','stalemate','checkmate','other']);
       allow update: if (isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data) || isParticipant(request.resource.data) || gameHasOpenSeat(get(/databases/$(database)/documents/games/$(gameId)).data))
         && request.resource.data.keys().hasOnly([
           'status','whiteArrived','blackArrived','firstCard','gameId','createdAt',
-          'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt',
-          'winner','resultReason','drawOffer'
+          'timeLimitMs','whiteTimeLeftMs','blackTimeLeftMs','lastMoveAt','expiresAt',
+          'whiteLastActiveAt','blackLastActiveAt','winner','resultReason','drawOffer','unreadByUid'
         ])
         && (!('gameId' in request.resource.data) || request.resource.data.gameId == gameId)
         && (!('drawOffer' in request.resource.data) || true)
+        && (!('unreadByUid' in request.resource.data) || request.resource.data.unreadByUid is map)
         && (!('winner' in request.resource.data) || request.resource.data.winner in ['w','b',null])
         && (!('resultReason' in request.resource.data) || request.resource.data.resultReason in ['timeout','resign','agreement','stalemate','checkmate','other']);
       allow delete: if false;
@@ -67,12 +69,12 @@ service cloud.firestore {
       allow read: if isAuthed();
       allow create: if isAuthed()
         && (!('gameId' in request.resource.data) || request.resource.data.gameId == gameId)
-        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId','createdAt'])
+        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId','createdAt','expiresAt'])
         && (!('moves' in request.resource.data) || request.resource.data.moves is list || request.resource.data.moves is map);
       allow update: if request.auth != null
         && (isParticipant(get(/databases/$(database)/documents/games/$(gameId)).data) || gameHasOpenSeat(get(/databases/$(database)/documents/games/$(gameId)).data))
         && (!('gameId' in request.resource.data) || request.resource.data.gameId == gameId)
-        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId','createdAt'])
+        && request.resource.data.keys().hasOnly(['moves','fen','pgn','gameId','createdAt','expiresAt'])
         && (!('moves' in request.resource.data) || request.resource.data.moves is list || request.resource.data.moves is map);
       allow delete: if false;
     }
@@ -84,13 +86,13 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      // Chat doc shape: { gameId, messages, unread, createdAt }
+      // Chat doc shape: { gameId, messages, createdAt }
       allow read: if isParticipant(get(/databases/$(database)/documents/games/$(chatId)).data);
       allow create, update: if request.resource.data.gameId == chatId // enforce chat doc id ties to game
         && isParticipant(get(/databases/$(database)/documents/games/$(request.resource.data.gameId)).data)
-        && request.resource.data.keys().hasOnly(['gameId','messages','unread','createdAt'])
+        && request.resource.data.keys().hasOnly(['gameId','messages','createdAt','expiresAt'])
         && (!('messages' in request.resource.data) || request.resource.data.messages is list || request.resource.data.messages is map)
-        && (!('unread' in request.resource.data) || request.resource.data.unread is map);
+        ;
       allow delete: if false;
     }
   }

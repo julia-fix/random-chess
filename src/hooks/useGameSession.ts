@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, onSnapshot, DocumentReference, Unsubscribe } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { GameDataDoc, GameDoc, GameMovesDoc } from '../types/game';
@@ -16,6 +16,8 @@ export type GameSessionState = {
 
 export default function useGameSession(gameId?: string): GameSessionState {
 	const [state, setState] = useState<GameSessionState>({ loading: true });
+	const [isVisible, setIsVisible] = useState(() => (typeof document !== 'undefined' ? document.visibilityState === 'visible' : true));
+	const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
 
 	const refs = useMemo(() => {
 		if (!gameId) return {};
@@ -27,6 +29,41 @@ export default function useGameSession(gameId?: string): GameSessionState {
 	}, [gameId]);
 
 	useEffect(() => {
+		if (typeof document === 'undefined') return;
+		const handleVisibility = () => setIsVisible(document.visibilityState === 'visible');
+		document.addEventListener('visibilitychange', handleVisibility);
+		return () => document.removeEventListener('visibilitychange', handleVisibility);
+	}, []);
+
+	const isActiveAt = useCallback(
+		(value: any) => {
+			if (!value) return false;
+			const ms =
+				typeof value === 'number'
+					? value
+					: typeof value?.toDate === 'function'
+						? value.toDate().getTime()
+						: typeof value?.seconds === 'number'
+							? value.seconds * 1000
+							: null;
+			return ms !== null ? Date.now() - ms <= ACTIVE_WINDOW_MS : false;
+		},
+		[ACTIVE_WINDOW_MS]
+	);
+
+	const bothActive = useMemo(() => {
+		if (!state.gameData) return true;
+		return isActiveAt(state.gameData.whiteLastActiveAt) && isActiveAt(state.gameData.blackLastActiveAt);
+	}, [isActiveAt, state.gameData]);
+
+	const shouldSubscribeMoves = useMemo(() => {
+		if (!isVisible) return false;
+		if (!state.gameData) return true;
+		if (state.gameData.status === 'playing') return true;
+		return bothActive;
+	}, [isVisible, state.gameData, bothActive]);
+
+	useEffect(() => {
 		if (!gameId || !refs.gameRef || !refs.gameDataRef || !refs.movesRef) {
 			setState({ loading: false, error: 'Missing gameId' });
 			return;
@@ -34,19 +71,17 @@ export default function useGameSession(gameId?: string): GameSessionState {
 
 		let unsubGame: Unsubscribe | undefined;
 		let unsubGameData: Unsubscribe | undefined;
-		let unsubMoves: Unsubscribe | undefined;
 		let cancelled = false;
 
 		const loadInitial = async () => {
 			try {
-				const [gameSnap, gameDataSnap, movesSnap] = await Promise.all([getDoc(refs.gameRef!), getDoc(refs.gameDataRef!), getDoc(refs.movesRef!)]);
+				const [gameSnap, gameDataSnap] = await Promise.all([getDoc(refs.gameRef!), getDoc(refs.gameDataRef!)]);
 				if (cancelled) return;
 
 				setState((prev) => ({
 					...prev,
 					game: gameSnap.data() as GameDoc | undefined,
 					gameData: gameDataSnap.data() as GameDataDoc | undefined,
-					moves: movesSnap.data() as GameMovesDoc | undefined,
 					gameRef: refs.gameRef,
 					gameDataRef: refs.gameDataRef,
 					movesRef: refs.movesRef,
@@ -60,6 +95,14 @@ export default function useGameSession(gameId?: string): GameSessionState {
 		};
 
 		loadInitial();
+
+		if (!isVisible) {
+			return () => {
+				cancelled = true;
+				unsubGame && unsubGame();
+				unsubGameData && unsubGameData();
+			};
+		}
 
 		unsubGame = onSnapshot(
 			refs.gameRef,
@@ -82,7 +125,18 @@ export default function useGameSession(gameId?: string): GameSessionState {
 			(error) => setState((prev) => ({ ...prev, error: error.message }))
 		);
 
-		unsubMoves = onSnapshot(
+		return () => {
+			cancelled = true;
+			unsubGame && unsubGame();
+			unsubGameData && unsubGameData();
+		};
+	}, [gameId, refs.gameDataRef, refs.gameRef, refs.movesRef, isVisible]);
+
+	useEffect(() => {
+		if (!gameId || !refs.movesRef) return;
+		if (!shouldSubscribeMoves) return;
+
+		const unsubMoves = onSnapshot(
 			refs.movesRef,
 			(snap) => {
 				if (!snap.exists()) return;
@@ -92,12 +146,9 @@ export default function useGameSession(gameId?: string): GameSessionState {
 		);
 
 		return () => {
-			cancelled = true;
-			unsubGame && unsubGame();
-			unsubGameData && unsubGameData();
-			unsubMoves && unsubMoves();
+			unsubMoves();
 		};
-	}, [gameId, refs.gameDataRef, refs.gameRef, refs.movesRef]);
+	}, [gameId, refs.movesRef, shouldSubscribeMoves]);
 
 	return state;
 }

@@ -54,7 +54,7 @@ describe('gameService.updateMovesDoc', () => {
 		await markPlayerArrived(gameRef, gameDataRef, 'white', 'uid', 'Name');
 		expect(updateDoc).toHaveBeenCalledTimes(2);
 		expect(updateDoc).toHaveBeenCalledWith(gameRef, { white: 'uid', whiteName: 'Name', participants: { _arrayUnion: ['uid'] } });
-		expect(updateDoc).toHaveBeenCalledWith(gameDataRef, { whiteArrived: true });
+		expect(updateDoc).toHaveBeenCalledWith(gameDataRef, { whiteArrived: true, whiteLastActiveAt: '__server_ts__' });
 	});
 
 	it('setGameStatus writes status', async () => {

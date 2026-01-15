@@ -21,9 +21,12 @@ export type GameDataDoc = {
 	whiteTimeLeftMs?: number;
 	blackTimeLeftMs?: number;
 	lastMoveAt?: any;
+	whiteLastActiveAt?: any;
+	blackLastActiveAt?: any;
 	winner?: 'w' | 'b' | null;
 	resultReason?: 'timeout' | 'resign' | 'agreement' | 'stalemate' | 'checkmate' | 'insufficient' | 'other';
 	drawOffer?: { by: 'w' | 'b' };
+	unreadByUid?: Record<string, number>;
 };
 
 export type GameMovesDoc = {
@@ -50,7 +53,6 @@ export type ChatMessage = {
 export type ChatDoc = {
 	gameId?: string;
 	messages?: ChatMessage[];
-	unread?: Record<string, number>;
 	createdAt?: any;
 };
 

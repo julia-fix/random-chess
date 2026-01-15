@@ -3,15 +3,12 @@ import { IntlProvider } from 'react-intl';
 import PlayerInfo from './PlayerInfo';
 
 vi.mock('firebase/firestore', () => {
-	const onSnapshot = vi.fn((ref: any, onNext: any) => {
-		onNext({
-			exists: () => true,
-			data: () => ({ displayName: 'Test', isAnonymous: false, photoURL: null, uid: 'uid' }),
-		});
-		return () => {};
-	});
+	const getDoc = vi.fn(async () => ({
+		exists: () => true,
+		data: () => ({ displayName: 'Test', isAnonymous: false, photoURL: null, uid: 'uid' }),
+	}));
 	const doc = vi.fn();
-	return { onSnapshot, doc, getFirestore: vi.fn() };
+	return { getDoc, doc, getFirestore: vi.fn() };
 });
 
 describe('PlayerInfo', () => {

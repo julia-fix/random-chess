@@ -47,6 +47,7 @@ vi.mock('../services/gameService', () => ({
 	offerDraw: vi.fn(),
 	clearDrawOffer: vi.fn(),
 	setClocksSnapshot: (...args: any[]) => setClocksSnapshot(...args),
+	updatePlayerLastActive: vi.fn(),
 }));
 
 vi.mock('../components/GameChat', () => ({

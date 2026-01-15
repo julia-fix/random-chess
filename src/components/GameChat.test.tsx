@@ -19,7 +19,6 @@ vi.mock('firebase/firestore', () => {
 						createdAt: { toDate: () => new Date() },
 					},
 				],
-				unread: { me: 0 },
 			}),
 		});
 		return () => {};
@@ -28,7 +27,8 @@ vi.mock('firebase/firestore', () => {
 	const updateDoc = vi.fn();
 	const arrayUnion = (...vals: any[]) => ({ _arrayUnion: vals });
 	const runTransaction = vi.fn();
-	return { onSnapshot, doc, updateDoc, arrayUnion, runTransaction, getFirestore: vi.fn() };
+	const setDoc = vi.fn();
+	return { onSnapshot, doc, updateDoc, arrayUnion, runTransaction, setDoc, getFirestore: vi.fn() };
 });
 
 const user = {
@@ -54,7 +54,12 @@ describe('GameChat', () => {
 		render(
 			<IntlProvider locale="en" messages={English}>
 				<UserContext.Provider value={user}>
-					<GameChat gameId="gid" />
+					<GameChat
+						gameId="gid"
+						gameDataRef={{ id: 'gameData' } as any}
+						players={{ w: 'me', b: 'other' }}
+						unreadCount={0}
+					/>
 				</UserContext.Provider>
 			</IntlProvider>
 		);
