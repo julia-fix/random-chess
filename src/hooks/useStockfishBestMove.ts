@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
 // Use a concrete Stockfish worker build; import as URL so Vite serves it correctly.
 // eslint-disable-next-line import/no-relative-packages
 import stockfishWorkerUrl from 'stockfish/src/stockfish-17.1-lite-single-03e3232.js?url';
 
 export type BestMoveRequest = {
 	fen: string;
-	searchMoves: string[];
+	searchMoves?: string[];
 	depth?: number;
 	skill?: number;
 };
@@ -47,8 +48,8 @@ export function useStockfishBestMove() {
 		activeSettledRef.current = false;
 	}, []);
 
-	const getBestMove = useCallback(async ({ fen, searchMoves, depth = 8, skill }: BestMoveRequest) => {
-		if (!searchMoves.length) return null;
+	const getBestMove = useCallback(async ({ fen, searchMoves, depth, skill }: BestMoveRequest) => {
+		if (searchMoves && !searchMoves.length) return null;
 
 		// Only keep a single worker alive to avoid runaway CPU usage.
 		if (activeWorkerRef.current) {
@@ -56,7 +57,7 @@ export function useStockfishBestMove() {
 			activeWorkerRef.current = null;
 		}
 
-		const depthToUse = Math.max(2, Math.min(depth, 14));
+		const depthToUse = depth !== undefined ? Math.max(2, Math.min(depth, 20)) : undefined;
 		const requestId = ++requestIdRef.current;
 
 		return new Promise<string | null>((resolve) => {
@@ -122,7 +123,9 @@ export function useStockfishBestMove() {
 					}
 					engine.postMessage('ucinewgame');
 					engine.postMessage(`position fen ${fen}`);
-					engine.postMessage(`go depth ${depthToUse} movetime ${MOVE_TIME_MS} searchmoves ${searchMoves.join(' ')}`);
+					const searchMovesArg = searchMoves?.length ? ` searchmoves ${searchMoves.join(' ')}` : '';
+					const depthArg = depthToUse !== undefined ? ` depth ${depthToUse}` : '';
+					engine.postMessage(`go${depthArg} movetime ${MOVE_TIME_MS}${searchMovesArg}`);
 				}
 
 				if (text.startsWith('bestmove')) {
@@ -146,10 +149,16 @@ export function useStockfishBestMove() {
 			setTimeout(() => {
 				if (!settled && !activeSettledRef.current) {
 					console.warn(`[stockfish][${requestId}] no readyok yet, sending shallow search fallback`);
+					if (import.meta.env.DEV) {
+						toast('Stockfish is slow to respond. Using a shallow fallback search.', { icon: '⚠️' });
+					}
+					const searchMovesArg = searchMoves?.length ? ` searchmoves ${searchMoves.join(' ')}` : '';
+					const fallbackDepth = depthToUse !== undefined ? Math.min(4, depthToUse) : 6;
+					const fallbackDepthArg = fallbackDepth ? ` depth ${fallbackDepth}` : '';
 					engine.postMessage(`position fen ${fen}`);
-					engine.postMessage(`go depth ${Math.min(4, depthToUse)} movetime ${MOVE_TIME_MS} searchmoves ${searchMoves.join(' ')}`);
+					engine.postMessage(`go${fallbackDepthArg} movetime ${MOVE_TIME_MS}${searchMovesArg}`);
 				}
-			}, 200);
+			}, 5000);
 		});
 	}, []);
 

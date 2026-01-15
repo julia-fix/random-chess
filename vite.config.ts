@@ -6,6 +6,9 @@ export default defineConfig(({ mode }) => {
 	return {
 		plugins: [react()],
 		base: env.VITE_BASE || "/", // set via env to run in subfolder or root
+		server: {
+			host: true, // allow access from other devices on the LAN
+		},
 		css: {
 			preprocessorOptions: {
 				scss: {

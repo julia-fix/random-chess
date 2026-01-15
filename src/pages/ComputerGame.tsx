@@ -5,6 +5,7 @@ import { drawNextCard, initialDeck } from '../utils/cardDeck';
 import isValidMove from '../utils/isValidMove';
 import GameRulesModal from '../components/GameRulesModal';
 import { FormattedMessage, useIntl } from 'react-intl';
+import toast from 'react-hot-toast';
 import { useStockfishBestMove, WORKER_HARD_TIMEOUT_MS } from '../hooks/useStockfishBestMove';
 import usePageMeta from '../hooks/usePageMeta';
 
@@ -12,6 +13,13 @@ const DEFAULT_LIMIT = 5 * 60 * 1000;
 const DEFAULT_SKILL = 10;
 
 const STORAGE_KEY = 'computer-game-state';
+const depthForSkill = (skill: number) => {
+	if (skill <= 2) return 6;
+	if (skill <= 5) return 10;
+	if (skill <= 10) return 12;
+	if (skill <= 15) return 14;
+	return 20;
+};
 
 export default function ComputerGame() {
 	const chessRef = useRef(new Chess());
@@ -19,6 +27,7 @@ export default function ComputerGame() {
 	const [sessionId, setSessionId] = useState<number>(() => Date.now());
 	const [showRules, setShowRules] = useState(false);
 	const intl = useIntl();
+	const restoredRef = useRef(false);
 	usePageMeta({
 		titleId: 'meta.title.computer',
 		titleDefault: 'Play vs Computer | Random Chess',
@@ -94,6 +103,7 @@ export default function ComputerGame() {
 				if (saved.skillLevel !== undefined) {
 					setSkillLevel(saved.skillLevel);
 				}
+				restoredRef.current = true;
 				return;
 			} catch {
 				// fallback to fresh start
@@ -197,7 +207,9 @@ export default function ComputerGame() {
 				}
 				return;
 			}
-			const searchMoves = cardMoves.map((m) => `${m.from}${m.to}${m.promotion ?? ''}`);
+			const useFullSearch = card === 'any';
+			const searchMoves = useFullSearch ? undefined : cardMoves.map((m) => `${m.from}${m.to}${m.promotion ?? ''}`);
+			const depth = depthForSkill(skillLevel);
 			let bestUci: string | null = null;
 			let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 			let timedOut = false;
@@ -207,7 +219,7 @@ export default function ComputerGame() {
 					timedOut = true;
 					abortActive('bot-move-timeout');
 				}, WORKER_HARD_TIMEOUT_MS + 1000);
-				bestUci = await getBestMove({ fen: game.fen(), searchMoves, skill: skillLevel, depth: 8 });
+				bestUci = await getBestMove({ fen: game.fen(), searchMoves, skill: skillLevel, depth });
 			} catch (err) {
 				// Fallback to a legal move if the engine misbehaves.
 				console.error('Stockfish failed to respond, using fallback move', err);
@@ -215,7 +227,18 @@ export default function ComputerGame() {
 			} finally {
 				if (timeoutHandle) clearTimeout(timeoutHandle);
 			}
-			const chosen = cardMoves.find((m) => `${m.from}${m.to}${m.promotion ?? ''}` === bestUci) ?? cardMoves[0];
+			const matchedMove = bestUci ? cardMoves.find((m) => `${m.from}${m.to}${m.promotion ?? ''}` === bestUci) : undefined;
+			const chosen = matchedMove ?? cardMoves[0];
+			if (!matchedMove) {
+				const reason = timedOut
+					? 'Stockfish timed out. Using a fallback move.'
+					: 'Stockfish did not return a move. Using a fallback move.';
+				if (import.meta.env.DEV) {
+					toast(reason, { icon: '⚠️' });
+				}
+			} else if (import.meta.env.DEV) {
+				toast.success('Stockfish move found.');
+			}
 
 			const moveResult = game.move({ from: chosen.from, to: chosen.to, promotion: chosen.promotion });
 			if (!moveResult) {
@@ -331,6 +354,18 @@ export default function ComputerGame() {
 			botMove(cardForBot);
 		}
 	}, [pendingBotMove, gameStatus, lastMove, botMove]);
+
+	useEffect(() => {
+		if (!restoredRef.current) return;
+		if (gameStatus !== 'playing') {
+			restoredRef.current = false;
+			return;
+		}
+		if (activeColor === 'b' && lastMove?.nextCard !== undefined) {
+			setPendingBotMove(true);
+			restoredRef.current = false;
+		}
+	}, [activeColor, gameStatus, lastMove]);
 
 	return (
 		<div style={{ paddingTop: 20 }}>
