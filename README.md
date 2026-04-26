@@ -1,6 +1,7 @@
 # Random Chess
 
 Random Chess is a card-driven twist on classic chess. Each turn you draw a card that constrains your legal move, creating sharp tactical puzzles, surprising tempo swings, and a fresh kind of planning.
+Play it here: https://ideafix-pro.ru/chess/
 
 ## Highlights
 
@@ -79,7 +80,6 @@ If you want App Check, enable reCAPTCHA Enterprise and set `VITE_APP_CHECK_SITE_
 Collections and document shapes created by the app:
 
 - `games/{gameId}`
-
   - `white`: string | null (uid)
   - `black`: string | null (uid)
   - `participants`: string[] (uids)
@@ -89,7 +89,6 @@ Collections and document shapes created by the app:
   - `expiresAt`: timestamp (TTL)
 
 - `gameData/{gameId}`
-
   - `status`: "waiting" | "playing" | "finished"
   - `whiteArrived`: boolean
   - `blackArrived`: boolean
@@ -108,7 +107,6 @@ Collections and document shapes created by the app:
   - `unreadByUid`: map of uid -> number (unread chat messages)
 
 - `gameMoves/{gameId}`
-
   - `moves`: array of chess.js move objects
   - `fen`: string
   - `pgn`: string
@@ -117,7 +115,6 @@ Collections and document shapes created by the app:
   - `expiresAt`: timestamp (TTL)
 
 - `chats/{gameId}`
-
   - `gameId`: string (must match doc id)
   - `messages`: array of
     - `createdAt`: timestamp
